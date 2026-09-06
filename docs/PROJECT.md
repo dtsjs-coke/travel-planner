@@ -10,7 +10,7 @@ M5 완료 (브라우저 확인까지 완료): 지도 렌더링, 일정 추가 �
 - [x] 서버 키(Places API (New) 전용, 브라우저 키와 분리) 발급 → `backend/.env`의 `GOOGLE_PLACES_SERVER_KEY`
 - [ ] Google Cloud Billing에 예산 알림 설정 (예: $5) — 아직 확인 안 됨, 잊지 말고 설정할 것
 - [ ] **실제 Google Maps Map ID 발급** (Cloud Console → 지도 관리) — 현재는 임시로 `DEMO_MAP_ID` 사용 중이라 지도에 "개발 목적으로만 사용" 워터마크가 뜸. 배포(M6) 전에 발급해서 `MapView.tsx`의 기본값 교체 필요.
-- [ ] Neon 프로젝트 생성 → DATABASE_URL 확보
+- [x] Neon 프로젝트 생성 → DATABASE_URL 확보 (Neon Auth는 off로 유지 — 이 프로젝트는 공유 비밀번호 방식이라 불필요). 실제 값은 Render env 변수 설정 시 사용 예정이며 비밀값이라 이 문서에는 기록하지 않음(비밀번호 관리자에 보관 권장)
 - [ ] Render 웹 서비스 생성 → env 변수 설정
 - [ ] Vercel 프로젝트 생성 → env 변수 설정
 - [ ] SHARED_PASSCODE 정하고 두 사람 모두 공유
@@ -65,6 +65,7 @@ M5 완료 (브라우저 확인까지 완료): 지도 렌더링, 일정 추가 �
 - 2026-09-04: M4 완료 — Google Cloud 키 2개(브라우저/서버) 발급, `services/google_places.py`(Places API (New) Text Search + Place Details 래퍼), `/api/places/search`·`/api/places/{id}` 프록시, 프론트 `AddItemModal`(구글 검색/직접 입력 탭)을 `DayEditorPage`에 연동. 실제 API 호출까지 curl로 검증(오사카성 검색·상세조회 성공).
 - 2026-09-04: 사용자 요청으로 "트리플(Triple) 앱" UX 반영을 계획 문서에 추가 — 일정 편집화면 리스트+지도 상시 표시, 검색 시에도 지도 보면서 추가.
 - 2026-09-04: M5 완료 — `components/MapView.tsx`(`@vis.gl/react-google-maps` Map+AdvancedMarker+Pin+Polyline, DEMO_MAP_ID 사용중 — 배포 전 실제 Map ID 발급 필요), `DayEditorPage`에 리스트+지도 2단 레이아웃 상시 표시, `AddItemModal`에 지도 내장(검색결과 초록핀 클릭 시 바로 추가, 기존 일정은 검정 번호핀). `@types/google.maps` 설치 + `tsconfig.app.json`의 `types` 배열에 추가해서 타입 에러 해결. 빌드 검증 통과.
+- 2026-09-06: M6 진행 — Neon Postgres 프로젝트 생성(Neon Auth off 유지), `db.py`/`alembic/env.py`의 psycopg 드라이버 강제 변환 로직을 실제 Neon URL로 `alembic upgrade head` 실행해 검증(정상 적용). 다음은 Render 백엔드 배포.
 
 ## Notes for Next Session
 - SQLModel 사용 시 Alembic `script.py.mako`에 `import sqlmodel`을 반드시 추가해야 autogenerate가 만든 마이그레이션이 실행됨 (이미 반영됨, 새 마이그레이션 생성 시 자동 포함).

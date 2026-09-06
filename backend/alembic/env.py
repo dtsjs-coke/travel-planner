@@ -8,6 +8,7 @@ from alembic import context
 
 from app import models  # noqa: F401  -- registers tables on SQLModel.metadata
 from app.config import settings
+from app.db import _normalize_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,7 +19,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", _normalize_database_url(settings.database_url))
 
 target_metadata = SQLModel.metadata
 

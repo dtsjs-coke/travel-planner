@@ -96,5 +96,12 @@ M5: `@vis.gl/react-google-maps`로 선택된 날짜의 일정을 순서대로 �
 - [x] **브라우저에서 지도 렌더링 실제 확인** — 완료. 중간에 `RefererNotAllowedMapError` 발생(브라우저 키의 HTTP 리퍼러 제한에 현재 접속 주소가 없었음) → 리퍼러 목록을 와일드카드 없는 정확한 값(`http://localhost:5173/*`)으로 저장 후 해결. **참고**: 이 프로젝트에서 리퍼러 와일드카드 패턴(`localhost:*/*`, `*localhost:*/*`)이 기대대로 안 먹혔던 경험이 있으니, 이후 배포 도메인 추가할 때도 와일드카드 대신 정확한 URL을 우선 시도할 것.
 - [ ] Google Cloud Console에서 **실제 Map ID 발급** (배포 전 필요 — M6에서 처리 예정)
 
-### 다음 할 일
+### 다음 할 일 (당시 기준, 아래 M6 진행으로 갱신됨)
 M6: Neon(DB)/Render(백엔드)/Vercel(프론트) 배포, 실제 Map ID 적용, CORS·쿠키 크로스도메인 설정, PC+안드로이드 실기기 접속 테스트.
+
+---
+
+## M6 — 배포 (진행 중)
+
+- `.gitignore` 정리: `*.db`(로컬 dev.db), `.claude/`(Claude Code 로컬 툴 설정) 추가로 제외. `.env`는 계속 제외, `.env.example`은 포함(비밀값 없음 확인).
+- 사용자 승인 하에 최초 커밋 생성 + GitHub 저장소(`https://github.com/dtsjs-coke/travel-planner`, private) 생성 후 push 완료.
