@@ -6,4 +6,4 @@
 |---|---|---|
 | 2026-09-03 | M0(백엔드/프론트엔드 스캐폴딩) + M1(DB 모델, 공유 비밀번호 인증, `/api/trips` CRUD) 완료. `venv312` PATH 충돌, CORS 포트 불일치 등 로컬 환경 이슈 디버깅. | [2026-09-03/log.md](2026-09-03/log.md) |
 | 2026-09-04 | M2~M5 완료 (일정 CRUD, dnd-kit 드래그, Google Places 연동, 구글맵+트리플 스타일 UX 통합). 브라우저 지도 렌더링 확인 필요. | [2026-09-04/log.md](2026-09-04/log.md) |
-| 2026-09-06 | M6 진행: Neon Postgres 프로젝트 생성 및 Alembic 마이그레이션 실측 검증 완료. 다음은 Render/Vercel 배포. | [2026-09-06/log.md](2026-09-06/log.md) |
+| 2026-09-06 | M6 완료: Neon/Render/Vercel 전부 배포, CORS·쿠키·Deployment Protection 이슈 해결 후 실제 로그인/세션 유지 확인. 남은 건 Map ID·예산 알림·실기기 테스트. | [2026-09-06/log.md](2026-09-06/log.md) |
