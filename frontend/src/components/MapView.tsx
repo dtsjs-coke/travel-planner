@@ -36,7 +36,9 @@ function FitToPoints({ points }: { points: LatLng[] }) {
   return null
 }
 
-export default function MapView({ items, searchResults = [], onSelectSearchResult, height = '300px', mapId = 'DEMO_MAP_ID' }: Props) {
+const DEFAULT_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+
+export default function MapView({ items, searchResults = [], onSelectSearchResult, height = '300px', mapId = DEFAULT_MAP_ID }: Props) {
   const itemPoints: LatLng[] = items
     .filter((item): item is ItineraryItem & { lat: number; lng: number } => item.lat != null && item.lng != null)
     .map((item) => ({ lat: item.lat, lng: item.lng }))

@@ -22,5 +22,18 @@
 - CORS 해결 후 실제로 비밀번호 입력 → 로그인 → 세션 유지까지 브라우저에서 확인 완료. (참고로 `/api/auth/me`가 로그인 전 401 뜨는 건 정상 동작이라 헷갈리지 말 것 — 실제 확인 포인트는 `/api/auth/login` 성공 여부와 그 이후 세션 유지.)
 - `ENVIRONMENT=production`을 Render에 미리 설정해뒀던 덕에 세션 쿠키가 `SameSite=None; Secure`로 정상 발급됨 — 이 값이 빠지면 `SameSite=Lax`가 되어 크로스 도메인(vercel.app ↔ onrender.com) 요청에 쿠키가 아예 안 실려서 로그인이 무한 실패한 것처럼 보이는 함정이 있음(`docs/PROJECT.md` Gotchas에 기록).
 
+## 실제 Google Maps Map ID 적용
+
+- Cloud Console → Map Management에서 Map ID 발급. Raster vs Vector 선택지가 있었는데, 이 앱은 번호 마커+경로선만 쓰고 3D/WebGL 스타일링이 필요 없어서 **Raster** 선택(Advanced Marker는 Raster에서도 정상 동작).
+- `frontend/src/components/MapView.tsx`에 하드코딩돼 있던 `mapId = 'DEMO_MAP_ID'` 기본값을 `import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'`로 변경 — 다른 키들처럼 env 변수로 분리. `.env.example`에도 추가.
+- 로컬 `.env`와 Vercel Environment Variables 양쪽에 `VITE_GOOGLE_MAPS_MAP_ID` 등록. Map ID는 비밀값이 아니라 브라우저 번들에 노출되는 공개 식별자라 별도 보관 불필요.
+- **이슈 1**: Vercel이 `VITE_` 접두사 값을 저장할 때 "이 값은 브라우저에 노출됩니다, 정말 공개해도 되면 Config로 바꾸세요" 경고를 띄우며 저장을 막음 — 의도된 동작이라 Config로 확인 후 저장.
+- **이슈 2**: Environment Variables 편집 중 실수로 `VITE_GOOGLE_MAPS_BROWSER_KEY`를 삭제함 → 로컬 `.env` 값 그대로 다시 추가해서 복구.
+- **이슈 3**: 재배포 후 `RefererNotAllowedMapError` 발생 — Google Maps 브라우저 키의 HTTP 리퍼러 허용 목록에 Vercel 도메인을 아직 등록 안 한 상태였음. `https://travel-planner-dtsjs.vercel.app/*` 추가(도메인은 정확히, 경로만 와일드카드 — 예전에 실패했던 "도메인 자체를 와일드카드"하는 패턴과는 다름) 후 정상 렌더링 확인.
+
+## Google Cloud 예산 알림
+
+- $5 기준, **"알림만(모든 서비스에서 사용 가능)"** 선택 — "지출 한도 적용"은 일부 서비스 한정 기능이고 Google Maps Platform은 그 대상이 아니라(실제로 API를 막아주지 않음), 애초 계획도 "청구되면 알림"이었어서 알림 방식으로 진행.
+
 ### 다음 할 일
-실제 Google Maps Map ID 발급(현재 DEMO_MAP_ID) → `MapView.tsx` 기본값 교체 → Google Cloud 예산 알림 설정 → PC/안드로이드 실기기로 최종 접속 테스트(M6 완료 기준).
+PC/안드로이드 실기기로 최종 접속 테스트(M6 완료 기준) — 이것만 남음.

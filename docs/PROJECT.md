@@ -1,15 +1,15 @@
 # Travel Planner — Project Notes
 
 ## Status / Current Milestone
-M6 대부분 완료: Neon(DB)·Render(백엔드)·Vercel(프론트) 모두 배포 완료, 로그인/세션까지 정상 동작 확인. 남은 건 실제 Map ID 발급, Google Cloud 예산 알림, PC+안드로이드 실기기 최종 확인.
+M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, Google Cloud 예산 알림까지 전부 완료. 마지막 남은 건 PC+안드로이드 실기기(서로 다른 네트워크) 최종 접속 테스트뿐 — 이게 끝나면 M6 완료.
 
 ## Setup TODOs (one-time)
 - [x] Google Cloud 프로젝트 생성, Maps JavaScript API + Places API (New) 활성화
 - [x] 결제 계정(카드) 등록 — Google Maps Platform은 무료 사용량 내에서도 카드 등록 필수
 - [x] 브라우저 키(HTTP 리퍼러 제한) 발급 → `frontend/.env`의 `VITE_GOOGLE_MAPS_BROWSER_KEY`
 - [x] 서버 키(Places API (New) 전용, 브라우저 키와 분리) 발급 → `backend/.env`의 `GOOGLE_PLACES_SERVER_KEY`
-- [ ] Google Cloud Billing에 예산 알림 설정 (예: $5) — 아직 확인 안 됨, 잊지 말고 설정할 것
-- [ ] **실제 Google Maps Map ID 발급** (Cloud Console → 지도 관리) — 현재는 임시로 `DEMO_MAP_ID` 사용 중이라 지도에 "개발 목적으로만 사용" 워터마크가 뜸. 배포(M6) 전에 발급해서 `MapView.tsx`의 기본값 교체 필요.
+- [x] Google Cloud Billing에 예산 알림 설정 완료 ($5, "알림만" 방식 — "지출 한도 적용"은 Maps Platform이 지원 대상에서 빠져있어 선택 안 함)
+- [x] **실제 Google Maps Map ID 발급** (Raster 타입 — 이 앱은 번호 마커/경로선만 쓰고 3D/WebGL 기능 불필요해서 Vector 대신 선택) → `frontend`의 `VITE_GOOGLE_MAPS_MAP_ID`로 분리(`MapView.tsx`가 이 값을 기본으로 사용, 없으면 `DEMO_MAP_ID` 폴백). 로컬 `.env` + Vercel Environment Variables에 등록, Google Maps 브라우저 키 리퍼러 목록에 `https://travel-planner-dtsjs.vercel.app/*` 추가 후 워터마크 없이 정상 렌더링 확인 완료.
 - [x] Neon 프로젝트 생성 → DATABASE_URL 확보 (Neon Auth는 off로 유지 — 이 프로젝트는 공유 비밀번호 방식이라 불필요). 실제 값은 Render env 변수 설정 시 사용 예정이며 비밀값이라 이 문서에는 기록하지 않음(비밀번호 관리자에 보관 권장)
 - [x] Render 웹 서비스 생성 → env 변수 설정 완료, 배포 성공(Live). 서비스 URL: `https://travel-planner-q6si.onrender.com` (`/api/health` → `{"status":"ok"}` 확인)
 - [x] Vercel 프로젝트 생성 → env 변수 설정 완료, 배포 성공. 도메인: `https://travel-planner-dtsjs.vercel.app` (Deployment Protection은 반드시 off로 설정 — 켜져있으면 방문자가 Vercel 로그인을 강제로 요구받아 공유 비밀번호 방식과 충돌함)
@@ -35,12 +35,15 @@ M6 대부분 완료: Neon(DB)·Render(백엔드)·Vercel(프론트) 모두 배�
 ### frontend/.env
 - `VITE_API_BASE_URL` — 백엔드 API 기본 URL
 - `VITE_GOOGLE_MAPS_BROWSER_KEY` — Maps JS SDK용 브라우저 키 (리퍼러 제한 필수)
+- `VITE_GOOGLE_MAPS_MAP_ID` — Advanced Marker 렌더링에 필요한 Map ID (Raster 타입). 비밀값 아님 — 브라우저 번들에 그대로 노출되는 공개 식별자.
 
 ## Gotchas (발생했던 문제들, 재발 방지용)
 - Google Maps 브라우저 키의 HTTP 리퍼러 제한에서 **와일드카드 패턴이 기대대로 안 먹힐 수 있음** (`localhost:*/*`, `*localhost:*/*` 둘 다 실패 경험). 새 도메인 추가할 때 와일드카드보다 **정확한 전체 URL**(`http://localhost:5173/*`, 배포 후엔 `https://실제도메인/*`)을 우선 시도할 것.
 - `.env` 파일은 서버/dev 프로세스 **시작 시점에만** 읽힘 — 실행 중에 값 추가/수정했다면 반드시 재시작해야 반영됨 (백엔드 uvicorn, 프론트 vite 둘 다 해당).
 - **`ENVIRONMENT=production`을 Render에 빼먹으면 로그인이 무한 실패한 것처럼 보임**: `app/auth.py`가 `settings.environment == "production"`일 때만 세션 쿠키를 `Secure=True, SameSite=None`으로 발급한다. 이 값이 안 맞으면 `SameSite=Lax`로 발급되는데, 프론트(vercel.app)와 백엔드(onrender.com)가 서로 다른 도메인이라 브라우저가 크로스 도메인 요청에 Lax 쿠키를 아예 안 실어보낸다 → `/api/auth/login`은 200 성공해도 `/api/auth/me`가 계속 401 → 로그인이 안 되는 것처럼 보임. **원인**이었던 건 아니고 사전에 값 세팅해서 예방됐지만, 재발 방지용으로 기록.
 - **Vercel Deployment Protection(구 Vercel Authentication)을 꺼야 함**: 기본값이 켜져있으면 방문자가 사이트 접속 시 Vercel 계정 로그인을 강제로 요구받는다(우리 앱은 공유 비밀번호 방식이라 방문자가 Vercel 계정을 가질 필요가 없음). Project Settings → Deployment Protection에서 off로 변경 필요.
+- **Vite SPA를 Vercel에 올릴 때 `vercel.json` rewrite 필수**: 없으면 `/trips/2`처럼 클라이언트 라우팅 경로를 새로고침할 때 Vercel이 실제 파일을 못 찾아 404를 반환한다(실기기 테스트에서 PC/폰 둘 다 재현). `frontend/vercel.json`에 모든 경로를 `/index.html`로 rewrite하도록 추가해서 해결.
+- **모바일에서 `AddItemModal`에 검색창이 화면 밖으로 밀리고 한글 입력이 깨짐(ㅓㅏㄴㄷㅗㅇ)**: 검색창+목록+지도(고정 280px)를 담은 컨테이너가 `overflow-hidden`이라, 키보드가 올라와 화면이 좁아지면 내용이 넘쳐도 스크롤이 안 되고 잘려서 입력창이 화면 밖으로 밀려남 → 그 과정의 레이아웃 흔들림이 안드로이드 한글 IME 조합을 끊어서 자모가 안 합쳐지고 깨진 채로 보였던 것으로 추정. 모바일 폭에서는 `overflow-y-auto`로 바꿔서 스크롤 가능하게 수정(`AddItemModal.tsx`). 실기기 재확인 필요.
 
 ## Known Free-Tier Caveats
 - Render 백엔드: 15분 무활동 시 슬립, 재기동에 30~50초 소요 (필요 시 uptime pinger로 완화)
@@ -70,6 +73,7 @@ M6 대부분 완료: Neon(DB)·Render(백엔드)·Vercel(프론트) 모두 배�
 - 2026-09-06: M6 진행 — Neon Postgres 프로젝트 생성(Neon Auth off 유지), `db.py`/`alembic/env.py`의 psycopg 드라이버 강제 변환 로직을 실제 Neon URL로 `alembic upgrade head` 실행해 검증(정상 적용). 다음은 Render 백엔드 배포.
 - 2026-09-06: Render 백엔드 배포 완료(Live) — `https://travel-planner-q6si.onrender.com`. 첫 배포 시도는 `db.py`/`env.py`의 psycopg 드라이버 수정이 커밋 안 된 상태라 `ModuleNotFoundError: psycopg2`로 실패 → 커밋(`9b48ee7`)+push 후 재배포 성공, `/api/health` 200 확인. 다음은 Vercel 프론트 배포.
 - 2026-09-06: M6 완료 — Vercel 프론트 배포(`https://travel-planner-dtsjs.vercel.app`), Deployment Protection off 설정, Render `CORS_ORIGINS`에 Vercel 도메인 추가, 실제 비밀번호 로그인 및 세션 유지까지 브라우저에서 확인 완료. 남은 건 실제 Map ID 발급, Google Cloud 예산 알림, PC+안드로이드 실기기 확인뿐.
+- 2026-09-06: 실제 Google Maps Map ID 발급(Raster) 및 적용 완료 — `MapView.tsx`가 `VITE_GOOGLE_MAPS_MAP_ID` 환경변수를 읽도록 수정(하드코딩된 `DEMO_MAP_ID` 제거), 로컬/Vercel 양쪽 env 등록, 브라우저 키 리퍼러 목록에 Vercel 도메인 추가 후 워터마크 없이 정상 렌더링 확인. 남은 건 Google Cloud 예산 알림, PC+안드로이드 실기기 확인.
 
 ## Notes for Next Session
 - SQLModel 사용 시 Alembic `script.py.mako`에 `import sqlmodel`을 반드시 추가해야 autogenerate가 만든 마이그레이션이 실행됨 (이미 반영됨, 새 마이그레이션 생성 시 자동 포함).

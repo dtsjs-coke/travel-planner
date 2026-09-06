@@ -91,7 +91,7 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
         </div>
 
         {tab === 'google' ? (
-          <div className="flex flex-1 flex-col gap-3 overflow-hidden md:flex-row">
+          <div className="flex flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
             <div className="flex flex-1 flex-col overflow-hidden md:w-1/2">
               <form onSubmit={handleSearch} className="mb-3 flex gap-2">
                 <input
