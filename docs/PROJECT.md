@@ -1,7 +1,7 @@
 # Travel Planner — Project Notes
 
 ## Status / Current Milestone
-M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, Google Cloud 예산 알림까지 전부 완료. 마지막 남은 건 PC+안드로이드 실기기(서로 다른 네트워크) 최종 접속 테스트뿐 — 이게 끝나면 M6 완료.
+**M6 완료 — 초기 개발안(M0~M6) 전체 완성.** Neon·Render·Vercel 배포, 실제 Map ID, Google Cloud 예산 알림, PC+안드로이드(크롬, 서로 다른 네트워크) 실기기 테스트까지 통과. 삼성 인터넷 브라우저 이슈는 아래 Known Issues 참고(우선순위 낮음, 미해결). 다음 단계는 M7(폴리싱 — 예산/지출 추적, 메모, 여행 목록 편집 등)이며, 이건 애초 계획에서도 선택적 후속 작업으로 분리해뒀던 부분.
 
 ## Setup TODOs (one-time)
 - [x] Google Cloud 프로젝트 생성, Maps JavaScript API + Places API (New) 활성화
@@ -43,8 +43,10 @@ M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, 
 - **`ENVIRONMENT=production`을 Render에 빼먹으면 로그인이 무한 실패한 것처럼 보임**: `app/auth.py`가 `settings.environment == "production"`일 때만 세션 쿠키를 `Secure=True, SameSite=None`으로 발급한다. 이 값이 안 맞으면 `SameSite=Lax`로 발급되는데, 프론트(vercel.app)와 백엔드(onrender.com)가 서로 다른 도메인이라 브라우저가 크로스 도메인 요청에 Lax 쿠키를 아예 안 실어보낸다 → `/api/auth/login`은 200 성공해도 `/api/auth/me`가 계속 401 → 로그인이 안 되는 것처럼 보임. **원인**이었던 건 아니고 사전에 값 세팅해서 예방됐지만, 재발 방지용으로 기록.
 - **Vercel Deployment Protection(구 Vercel Authentication)을 꺼야 함**: 기본값이 켜져있으면 방문자가 사이트 접속 시 Vercel 계정 로그인을 강제로 요구받는다(우리 앱은 공유 비밀번호 방식이라 방문자가 Vercel 계정을 가질 필요가 없음). Project Settings → Deployment Protection에서 off로 변경 필요.
 - **Vite SPA를 Vercel에 올릴 때 `vercel.json` rewrite 필수**: 없으면 `/trips/2`처럼 클라이언트 라우팅 경로를 새로고침할 때 Vercel이 실제 파일을 못 찾아 404를 반환한다(실기기 테스트에서 PC/폰 둘 다 재현). `frontend/vercel.json`에 모든 경로를 `/index.html`로 rewrite하도록 추가해서 해결.
-- **모바일에서 `AddItemModal`(구글 검색 탭)에 검색창이 화면 밖으로 밀리고 한글 입력이 깨짐(ㅓㅏㄴㄷㅗㅇ)**: 1차 수정(내부 컨테이너 `overflow-hidden`→`overflow-y-auto`)만으로는 부족했음 — 바깥 배경 레이어(`fixed inset-0 ... items-center`)에 스크롤이 없고 세로 중앙 정렬이라, 키보드가 올라와 보이는 영역이 줄면 모달 자체가 화면 밖으로 밀려도 스크롤해서 볼 방법이 없었음. 바깥 레이어도 `overflow-y-auto` + 모바일에서 `items-start`(위쪽 정렬, `sm:` 이상에서만 중앙 정렬)로 변경해서 해결 시도. 그 레이아웃 흔들림이 안드로이드 한글 IME 조합을 끊어서 자모가 안 합쳐지고 깨진 채로 보였던 것으로 추정 — "직접 입력" 탭(지도 없어서 내용이 짧음)은 처음부터 정상이었던 게 이 가설을 뒷받침함. 실기기 재확인 필요.
-- **삼성 인터넷 브라우저에서 로그인 후 데이터가 안 보임(크롬/카카오톡 인앱은 정상)**: 프론트(`vercel.app`)와 백엔드(`onrender.com`)가 다른 도메인이라 세션 쿠키가 브라우저 입장에서 크로스 사이트 쿠키로 보이고, 삼성 인터넷의 기본 트래킹 방지 기능이 이를 차단한 것으로 추정. **해결**: `frontend/vercel.json`에 `/api/*` 요청을 Render 백엔드로 프록시하는 rewrite를 추가해서, 프론트 기준으로 API가 완전히 같은 도메인(same-origin)이 되도록 변경. `VITE_API_BASE_URL`을 Vercel에서 빈 문자열로 바꿔서 상대경로로 호출하게 함 (로컬 `.env`는 그대로 `http://localhost:8000` 유지 — 로컬은 프록시를 안 거침). 백엔드 쿠키 설정(`SameSite=None; Secure`)은 same-origin에서도 그대로 잘 동작하므로 변경 불필요.
+- **모바일에서 `AddItemModal`(구글 검색 탭)에 검색창이 화면 밖으로 밀리고 한글 입력이 깨짐(ㅓㅏㄴㄷㅗㅇ)**: 1차 수정(내부 컨테이너 `overflow-hidden`→`overflow-y-auto`)만으로는 부족했음 — 바깥 배경 레이어(`fixed inset-0 ... items-center`)에 스크롤이 없고 세로 중앙 정렬이라, 키보드가 올라와 보이는 영역이 줄면 모달 자체가 화면 밖으로 밀려도 스크롤해서 볼 방법이 없었음. 바깥 레이어도 `overflow-y-auto` + 모바일에서 `items-start`(위쪽 정렬, `sm:` 이상에서만 중앙 정렬)로 변경해서 **해결 확인 완료** (실기기 재테스트 통과). 레이아웃 흔들림이 안드로이드 한글 IME 조합을 끊어서 자모가 안 합쳐지고 깨진 채로 보였던 것으로 추정 — "직접 입력" 탭(지도 없어서 내용이 짧음)은 처음부터 정상이었던 게 이 가설을 뒷받침함.
+
+## Known Issues (미해결, 낮은 우선순위)
+- **삼성 인터넷 브라우저에서 로그인 후 여행 목록이 안 보이고 추가 버튼도 안 먹음** (크롬, 카카오톡 인앱 브라우저는 정상). 추정 원인: 프론트(`vercel.app`)·백엔드(`onrender.com`)가 다른 도메인이라 세션 쿠키가 크로스 사이트 쿠키로 보였고, 삼성 인터넷의 기본 트래킹 방지 기능이 차단하는 것으로 의심. **시도한 해결책이 효과 없었음**: `frontend/vercel.json`에 `/api/*` → Render 프록시 rewrite 추가 + `VITE_API_BASE_URL`을 빈 문자열로(같은 도메인화 시도) 했지만 재현됨. 정확한 원인 미확정. 사용자 판단으로 우선순위 낮춰 보류 — 크롬으로 정상 사용 가능하니 당장 막힌 건 아님. 나중에 재조사할 경우: 삼성 인터넷 개발자 옵션 활성화 후 실제 네트워크 요청이 프록시 경로(`vercel.app/api/...`)로 가는지, Set-Cookie 헤더가 응답에 실제로 붙어오는지부터 확인할 것.
 
 ## Known Free-Tier Caveats
 - Render 백엔드: 15분 무활동 시 슬립, 재기동에 30~50초 소요 (필요 시 uptime pinger로 완화)
@@ -75,6 +77,7 @@ M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, 
 - 2026-09-06: Render 백엔드 배포 완료(Live) — `https://travel-planner-q6si.onrender.com`. 첫 배포 시도는 `db.py`/`env.py`의 psycopg 드라이버 수정이 커밋 안 된 상태라 `ModuleNotFoundError: psycopg2`로 실패 → 커밋(`9b48ee7`)+push 후 재배포 성공, `/api/health` 200 확인. 다음은 Vercel 프론트 배포.
 - 2026-09-06: M6 완료 — Vercel 프론트 배포(`https://travel-planner-dtsjs.vercel.app`), Deployment Protection off 설정, Render `CORS_ORIGINS`에 Vercel 도메인 추가, 실제 비밀번호 로그인 및 세션 유지까지 브라우저에서 확인 완료. 남은 건 실제 Map ID 발급, Google Cloud 예산 알림, PC+안드로이드 실기기 확인뿐.
 - 2026-09-06: 실제 Google Maps Map ID 발급(Raster) 및 적용 완료 — `MapView.tsx`가 `VITE_GOOGLE_MAPS_MAP_ID` 환경변수를 읽도록 수정(하드코딩된 `DEMO_MAP_ID` 제거), 로컬/Vercel 양쪽 env 등록, 브라우저 키 리퍼러 목록에 Vercel 도메인 추가 후 워터마크 없이 정상 렌더링 확인. 남은 건 Google Cloud 예산 알림, PC+안드로이드 실기기 확인.
+- 2026-09-06: Google Cloud 예산 알림($5, 알림만) 설정 완료. PC+안드로이드(크롬) 실기기 테스트 진행 — SPA 새로고침 404(`vercel.json` rewrite로 해결), 모바일 한글 입력 깨짐(모달 레이아웃 스크롤 수정으로 해결) 발견 및 수정 완료. 삼성 인터넷 브라우저 이슈는 원인 미확정으로 보류(Known Issues 참고). **초기 개발안(M0~M6) 완성.** 다음은 선택적 M7(폴리싱).
 
 ## Notes for Next Session
 - SQLModel 사용 시 Alembic `script.py.mako`에 `import sqlmodel`을 반드시 추가해야 autogenerate가 만든 마이그레이션이 실행됨 (이미 반영됨, 새 마이그레이션 생성 시 자동 포함).
