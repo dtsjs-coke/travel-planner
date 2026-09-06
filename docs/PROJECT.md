@@ -33,7 +33,7 @@ M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, 
 - `CORS_ORIGINS` — 허용할 프론트엔드 origin (콤마 구분)
 
 ### frontend/.env
-- `VITE_API_BASE_URL` — 백엔드 API 기본 URL
+- `VITE_API_BASE_URL` — 백엔드 API 기본 URL. **로컬**: `http://localhost:8000`. **Vercel(프로덕션)**: 빈 문자열 — `frontend/vercel.json`의 `/api/*` rewrite가 Render로 프록시해주므로 상대경로로 호출해야 same-origin이 되어 크로스 도메인 쿠키 차단 문제(삼성 인터넷 등)를 피할 수 있음.
 - `VITE_GOOGLE_MAPS_BROWSER_KEY` — Maps JS SDK용 브라우저 키 (리퍼러 제한 필수)
 - `VITE_GOOGLE_MAPS_MAP_ID` — Advanced Marker 렌더링에 필요한 Map ID (Raster 타입). 비밀값 아님 — 브라우저 번들에 그대로 노출되는 공개 식별자.
 
@@ -43,7 +43,8 @@ M6 거의 완료: Neon·Render·Vercel 배포, 로그인/세션, 실제 Map ID, 
 - **`ENVIRONMENT=production`을 Render에 빼먹으면 로그인이 무한 실패한 것처럼 보임**: `app/auth.py`가 `settings.environment == "production"`일 때만 세션 쿠키를 `Secure=True, SameSite=None`으로 발급한다. 이 값이 안 맞으면 `SameSite=Lax`로 발급되는데, 프론트(vercel.app)와 백엔드(onrender.com)가 서로 다른 도메인이라 브라우저가 크로스 도메인 요청에 Lax 쿠키를 아예 안 실어보낸다 → `/api/auth/login`은 200 성공해도 `/api/auth/me`가 계속 401 → 로그인이 안 되는 것처럼 보임. **원인**이었던 건 아니고 사전에 값 세팅해서 예방됐지만, 재발 방지용으로 기록.
 - **Vercel Deployment Protection(구 Vercel Authentication)을 꺼야 함**: 기본값이 켜져있으면 방문자가 사이트 접속 시 Vercel 계정 로그인을 강제로 요구받는다(우리 앱은 공유 비밀번호 방식이라 방문자가 Vercel 계정을 가질 필요가 없음). Project Settings → Deployment Protection에서 off로 변경 필요.
 - **Vite SPA를 Vercel에 올릴 때 `vercel.json` rewrite 필수**: 없으면 `/trips/2`처럼 클라이언트 라우팅 경로를 새로고침할 때 Vercel이 실제 파일을 못 찾아 404를 반환한다(실기기 테스트에서 PC/폰 둘 다 재현). `frontend/vercel.json`에 모든 경로를 `/index.html`로 rewrite하도록 추가해서 해결.
-- **모바일에서 `AddItemModal`에 검색창이 화면 밖으로 밀리고 한글 입력이 깨짐(ㅓㅏㄴㄷㅗㅇ)**: 검색창+목록+지도(고정 280px)를 담은 컨테이너가 `overflow-hidden`이라, 키보드가 올라와 화면이 좁아지면 내용이 넘쳐도 스크롤이 안 되고 잘려서 입력창이 화면 밖으로 밀려남 → 그 과정의 레이아웃 흔들림이 안드로이드 한글 IME 조합을 끊어서 자모가 안 합쳐지고 깨진 채로 보였던 것으로 추정. 모바일 폭에서는 `overflow-y-auto`로 바꿔서 스크롤 가능하게 수정(`AddItemModal.tsx`). 실기기 재확인 필요.
+- **모바일에서 `AddItemModal`(구글 검색 탭)에 검색창이 화면 밖으로 밀리고 한글 입력이 깨짐(ㅓㅏㄴㄷㅗㅇ)**: 1차 수정(내부 컨테이너 `overflow-hidden`→`overflow-y-auto`)만으로는 부족했음 — 바깥 배경 레이어(`fixed inset-0 ... items-center`)에 스크롤이 없고 세로 중앙 정렬이라, 키보드가 올라와 보이는 영역이 줄면 모달 자체가 화면 밖으로 밀려도 스크롤해서 볼 방법이 없었음. 바깥 레이어도 `overflow-y-auto` + 모바일에서 `items-start`(위쪽 정렬, `sm:` 이상에서만 중앙 정렬)로 변경해서 해결 시도. 그 레이아웃 흔들림이 안드로이드 한글 IME 조합을 끊어서 자모가 안 합쳐지고 깨진 채로 보였던 것으로 추정 — "직접 입력" 탭(지도 없어서 내용이 짧음)은 처음부터 정상이었던 게 이 가설을 뒷받침함. 실기기 재확인 필요.
+- **삼성 인터넷 브라우저에서 로그인 후 데이터가 안 보임(크롬/카카오톡 인앱은 정상)**: 프론트(`vercel.app`)와 백엔드(`onrender.com`)가 다른 도메인이라 세션 쿠키가 브라우저 입장에서 크로스 사이트 쿠키로 보이고, 삼성 인터넷의 기본 트래킹 방지 기능이 이를 차단한 것으로 추정. **해결**: `frontend/vercel.json`에 `/api/*` 요청을 Render 백엔드로 프록시하는 rewrite를 추가해서, 프론트 기준으로 API가 완전히 같은 도메인(same-origin)이 되도록 변경. `VITE_API_BASE_URL`을 Vercel에서 빈 문자열로 바꿔서 상대경로로 호출하게 함 (로컬 `.env`는 그대로 `http://localhost:8000` 유지 — 로컬은 프록시를 안 거침). 백엔드 쿠키 설정(`SameSite=None; Secure`)은 same-origin에서도 그대로 잘 동작하므로 변경 불필요.
 
 ## Known Free-Tier Caveats
 - Render 백엔드: 15분 무활동 시 슬립, 재기동에 30~50초 소요 (필요 시 uptime pinger로 완화)

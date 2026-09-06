@@ -66,7 +66,7 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl bg-white p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-800">일정 추가</h2>
