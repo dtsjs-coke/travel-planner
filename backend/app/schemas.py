@@ -1,6 +1,8 @@
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.services.trip_days import validate_date_range
 
 
 class ORMModel(BaseModel):
@@ -14,6 +16,12 @@ class TripCreate(BaseModel):
     end_date: dt.date | None = None
     currency: str = "KRW"
 
+    @model_validator(mode="after")
+    def _validate_date_range(self):
+        # 두 날짜가 모두 있으면 서버가 그 범위만큼 Day를 자동 생성하므로 여기서 범위를 검증한다.
+        validate_date_range(self.start_date, self.end_date)
+        return self
+
 
 class TripUpdate(BaseModel):
     name: str | None = None
@@ -21,6 +29,10 @@ class TripUpdate(BaseModel):
     start_date: dt.date | None = None
     end_date: dt.date | None = None
     currency: str | None = None
+
+    # 날짜 검증은 여기서 못 한다: PATCH는 부분 업데이트라 요청에 한쪽 날짜만 올 수 있고,
+    # 그때는 DB에 저장된 기존 값과 합쳐야 최종 기간이 정해진다.
+    # → `update_trip` 라우터가 병합 후 validate_date_range()를 호출한다.
 
 
 class TripRead(ORMModel):

@@ -1,16 +1,19 @@
 # Travel Planner — Project Notes
 
 ## Status / Current Milestone
+**M7 진행 중 — Tier 1 "여행 목록 관리 묶음"(삭제 UI / 정보 수정 UI / 날짜 범위 → Day 자동 생성) 백엔드+프론트 구현 완료(2026-09-07), qa-reviewer 검증에서 나온 이슈 2건(삭제 실패 시 무피드백 / `PATCH /api/trips/{id}` 날짜 검증 누락)도 수정 완료. 브라우저 수동 확인만 남음.** `POST /api/trips`가 날짜 범위를 받으면 Day를 함께 생성(백엔드), `TripListPage`에 삭제/수정/날짜 범위 생성 UI 연동(프론트) 모두 완료. 삭제 실패(네트워크 오류/401/404) 시에도 기존 `extractErrorMessage()` 패턴으로 해당 항목 근처에 에러 메시지 표시하도록 보강. 남은 건 실제 브라우저 클릭 테스트(사용자 확인 필요, `logs/2026-09-07.md` 참고).
+
 **M6 완료 — 초기 개발안(M0~M6) 전체 완성.** Neon·Render·Vercel 배포, 실제 Map ID, Google Cloud 예산 알림, PC+안드로이드(크롬, 서로 다른 네트워크) 실기기 테스트까지 통과. 삼성 인터넷 브라우저 이슈는 아래 Known Issues 참고(우선순위 낮음, 미해결). 다음 단계는 M7(폴리싱)이며, 후보 기능은 아래 "Backlog" 섹션에 우선순위별로 정리해둠.
 
 ## Backlog (M7+ 후보, 우선순위별)
 초기 개발안(M0~M6) 완성 후 사용자 관점에서 정리한 다음 후보 기능들. "구현 난이도 대비 가치" + "비용 발생 가능성" 기준으로 티어를 나눔. 2026-09-07 코드 검토 기준.
 
 ### Tier 1 — 저비용/고가치 (다음 착수 후보)
-- [ ] **여행 목록 삭제 UI** — 백엔드(`DELETE /api/trips/{id}`)와 프론트 API 클라이언트(`deleteTrip`, `frontend/src/api/trips.ts`)는 이미 있으나 `TripListPage`에 삭제 버튼이 연결돼있지 않음. 프론트엔드 전용 작업.
-- [ ] **여행 생성 시 날짜 범위 선택 → Day 자동 생성** — 현재 여행 생성 폼(`TripListPage`)에는 이름/목적지 입력만 있고 날짜 입력 자체가 없음(`start_date`/`end_date`는 스키마·API엔 있으나 프론트 미사용). Day는 `POST /api/trips/{id}/days`로 한 번에 하나씩만 생성 가능(일괄 생성 API 없음) → 날짜 범위 입력 UI + 일괄 Day 생성(신규 bulk 엔드포인트 또는 프론트 반복 호출) 필요.
+- [x] **여행 목록 삭제 UI** — 백엔드(`DELETE /api/trips/{id}`)·프론트 API 클라이언트(`deleteTrip`)는 이미 있었고, **2026-09-07 완료**: `TripListPage.tsx`에 삭제 버튼(`window.confirm()` 확인 후 호출) 연결.
+- [x] **여행 생성 시 날짜 범위 선택 → Day 자동 생성** — **2026-09-07 완료(백엔드+프론트 모두)**: `POST /api/trips`에 `start_date`+`end_date`가 둘 다 오면 서버가 같은 트랜잭션에서 그 범위(양끝 포함)의 Day를 자동 생성하고, 응답으로 `days` 배열이 포함된 `TripDetailRead`를 반환. `TripListPage.tsx` 생성 폼에 날짜 입력 2개 추가(둘 다 입력/둘 다 비움만 허용), 응답의 `days`로 목록만 갱신(별도 Day API 호출 없음).
+- [ ] **여행 기간(PATCH) 수정 시 Day 동기화** — 위 자동 생성은 "생성 시점"에만 동작한다. `PATCH /api/trips/{id}`로 기간을 바꿔도 Day는 그대로다(늘지도 줄지도 않음) — 2026-09-07에 프론트 수정 폼에도 "기간을 바꿔도 이미 만들어진 날짜는 유지됩니다" 안내 문구를 넣어 사용자에게 알리는 선에서 마무리. 실제 동기화가 필요해지면 `app/services/trip_days.py`의 `build_days_for_range()`를 재사용해 "부족한 날짜만 추가"(범위 밖 Day는 일정이 딸려있을 수 있으니 자동 삭제하지 말고 사용자에게 확인) 방식으로 확장할 것.
 - [ ] **예산/지출 추적 + 정산(더치페이)** — `ItineraryItem.cost_amount`/`cost_currency`, `Trip.currency` 필드는 이미 존재하나 집계/표시 UI가 없음. "누가 냈는지" 필드를 추가하면 정산 기능까지 확장 가능.
-- [ ] **여행 정보 수정(이름/기간 편집)** — `PATCH /api/trips/{id}`는 이미 있으나 프론트 편집 UI 없음.
+- [x] **여행 정보 수정(이름/기간 편집)** — **2026-09-07 완료**: `PATCH /api/trips/{id}`는 이미 있었고, `TripListPage.tsx`에 인라인 수정 폼(`TripEditForm`) 추가(이름/목적지/시작일/종료일).
 - [ ] **일정 메모/체크리스트** (Trip 또는 Day 레벨 자유 텍스트)
 
 ### Tier 2 — 중간 난이도 (비용 없음, 스키마/API 확장 필요)
@@ -44,6 +47,8 @@
 - 프론트엔드: React + Vite + Tailwind CSS v4 + React Query + dnd-kit + @vis.gl/react-google-maps
 - 인증: 개별 계정 없이 공유 비밀번호(passcode) 1개 → 서명된 쿠키 세션
 - 호스팅: Vercel(프론트) / Render 무료(백엔드) / Neon 무료(DB) — 각 도구의 목적/선택 이유/실제 등록 과정/트러블슈팅은 [`docs/infra/`](infra/) 참고: [neon.md](infra/neon.md), [render.md](infra/render.md), [vercel.md](infra/vercel.md)
+- **Day 자동 생성은 별도 bulk 엔드포인트 대신 `POST /api/trips` 안에서 처리** (2026-09-07 결정). 후보는 (a) `POST /api/trips/{id}/days/bulk` 신설, (b) 프론트에서 단건 API를 날짜 수만큼 반복 호출, (c) 트립 생성이 Day까지 같이 만들기. **(c) 선택** — 이유: ① 프론트가 왕복 1회로 끝나고 부분 실패(트립은 생겼는데 Day는 일부만) 상태가 원천적으로 없음(단일 트랜잭션), ② (b)는 N번 호출 중 실패 시 프론트가 보상 로직을 떠안아야 함, ③ (a)는 지금 호출할 곳이 트립 생성 한 군데뿐이라 엔드포인트만 늘어남. 대신 날짜 범위 → Day 변환 규칙 자체는 `app/services/trip_days.py`로 빼놨으므로, 나중에 (a)가 실제로 필요해지면(예: 기간 PATCH 동기화) 라우터만 추가하면 됨. 안전장치로 여행 1건의 최대 기간을 90일(`MAX_TRIP_DAYS`)로 제한 — 연도 오타 하나로 수천 행이 생겨 무료 티어 DB를 먹는 사고 방지.
+- **날짜 범위 검증은 스키마가 아니라 `app/services/trip_days.py`의 순수 함수 `validate_date_range(start, end)`가 단일 소스** (2026-09-07 결정). `POST`는 `TripCreate`의 `model_validator`가, `PATCH`는 `update_trip` 라우터가 각각 이 함수를 호출한다. PATCH는 부분 업데이트라 요청에 한쪽 날짜만 올 수 있어 **DB의 기존 값과 병합한 뒤**에야 최종 기간이 정해지므로, pydantic 스키마(`TripUpdate`)만으로는 검증이 불가능하다. 두 날짜 중 하나라도 없으면 검증을 건너뛰는 정책도 두 경로에서 동일(= Day 자동 생성 조건과 같은 기준).
 - **UX 참고: 트리플(Triple) 앱 방식** — 일정 편집 화면은 리스트+지도를 항상 함께 표시, 일정 "추가" 시에도 지도에서 검색 결과 핀 + 기존 일정 핀을 같이 보면서 고를 수 있게 함. M5에서 `MapView`를 `DayEditorPage`와 `AddItemModal` 양쪽에 통합 예정. 상세는 plan 파일의 "UX 참고: 트리플 앱 방식 반영" 섹션 참고.
 - 데이터 모델, API 라우트, 마일스톤 전체 계획: `C:\Users\user\.claude\plans\pjt-dapper-snowglobe.md` 참고
 
@@ -102,6 +107,10 @@
 - 2026-09-06: M6 완료 — Vercel 프론트 배포(`https://travel-planner-dtsjs.vercel.app`), Deployment Protection off 설정, Render `CORS_ORIGINS`에 Vercel 도메인 추가, 실제 비밀번호 로그인 및 세션 유지까지 브라우저에서 확인 완료. 남은 건 실제 Map ID 발급, Google Cloud 예산 알림, PC+안드로이드 실기기 확인뿐.
 - 2026-09-06: 실제 Google Maps Map ID 발급(Raster) 및 적용 완료 — `MapView.tsx`가 `VITE_GOOGLE_MAPS_MAP_ID` 환경변수를 읽도록 수정(하드코딩된 `DEMO_MAP_ID` 제거), 로컬/Vercel 양쪽 env 등록, 브라우저 키 리퍼러 목록에 Vercel 도메인 추가 후 워터마크 없이 정상 렌더링 확인. 남은 건 Google Cloud 예산 알림, PC+안드로이드 실기기 확인.
 - 2026-09-06: Google Cloud 예산 알림($5, 알림만) 설정 완료. PC+안드로이드(크롬) 실기기 테스트 진행 — SPA 새로고침 404(`vercel.json` rewrite로 해결), 모바일 한글 입력 깨짐(모달 레이아웃 스크롤 수정으로 해결) 발견 및 수정 완료. 삼성 인터넷 브라우저 이슈는 원인 미확정으로 보류(Known Issues 참고). **초기 개발안(M0~M6) 완성.** 다음은 선택적 M7(폴리싱).
+- 2026-09-07: M7 착수 — Tier 1 "여행 생성 시 날짜 범위 → Day 자동 생성"의 **백엔드** 구현 완료. `POST /api/trips`가 `start_date`+`end_date`를 받으면 같은 트랜잭션에서 Day를 일괄 생성하고 `TripDetailRead`(days 포함)를 반환하도록 변경, 날짜 범위 검증(역전/90일 초과 → 422) 추가, 변환 규칙은 `app/services/trip_days.py`로 분리. 스키마 변경이 없어 Alembic 마이그레이션 불필요. curl로 6개 케이스 end-to-end 검증 완료.
+- 2026-09-07: M7 Tier 1 **프론트엔드** 3건 완료 — `TripListPage.tsx`에 삭제 버튼(confirm 확인), 인라인 수정 폼(`TripEditForm`, 이름/목적지/기간 + Day 비동기화 안내 문구), 생성 폼 날짜 범위 입력(둘 다 입력 강제, `end` input `min`으로 1차 검증, 422 응답 메시지 표시) 추가. `api/trips.ts`에 `updateTrip` 신설, `createTrip` 반환 타입을 `TripDetail`로 수정(백엔드가 `days` 포함 응답을 주므로). `npm run build` 통과, curl로 API 계약 일치 확인. **Tier 1 백로그 3건(삭제/수정/날짜자동생성) 모두 구현 완료** — 남은 건 브라우저 수동 클릭 테스트(사용자 확인 필요, "여행 기간 PATCH 시 Day 동기화"는 후속 백로그로 남김).
+- 2026-09-07: QA 지적 사항 수정 — `PATCH /api/trips/{id}`에 날짜 범위 검증이 빠져있어 역전·366일 기간이 200으로 통과되던 문제 해결. 검증 로직을 `app/services/trip_days.py`의 `validate_date_range()` 순수 함수로 추출해 `TripCreate` validator와 `update_trip` 라우터가 공유하도록 리팩터링(POST 동작·에러 메시지는 그대로 유지). PATCH는 요청값을 DB의 기존 값과 병합한 뒤 검증 → 위반 시 422. curl 12개 케이스 검증 완료(회귀 포함).
+- 2026-09-07: QA 지적 사항 수정(프론트) — `TripListPage.tsx`의 `deleteMutation`에 `onError` 핸들러가 없어 삭제 실패(네트워크 오류/401/404 등) 시 아무 피드백 없이 버튼만 재활성화되던 문제 해결. 기존 `extractErrorMessage()` 헬퍼와 생성/수정 폼의 에러 표시 스타일을 재사용해, 실패한 항목의 `<li>` 근처에 에러 메시지 표시(어떤 트립이 실패했는지 `tripId`로 구분). `npm run build` 통과, 백엔드를 임시로 띄워 세션 없이 삭제(401 `Not authenticated`)·존재하지 않는 트립 삭제(404 `Trip not found`) 두 케이스를 API 레벨로 재현해 `extractErrorMessage()` 파싱 경로와 일치함을 확인(브라우저 UI 클릭 확인은 자동화 도구 부재로 미수행).
 
 ## Notes for Next Session
 - SQLModel 사용 시 Alembic `script.py.mako`에 `import sqlmodel`을 반드시 추가해야 autogenerate가 만든 마이그레이션이 실행됨 (이미 반영됨, 새 마이그레이션 생성 시 자동 포함).
