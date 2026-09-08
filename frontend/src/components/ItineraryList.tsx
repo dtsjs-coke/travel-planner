@@ -15,9 +15,10 @@ interface Props {
   items: ItineraryItem[]
   onDelete: (itemId: number) => void
   onReorder: (orderedItemIds: number[]) => void
+  onUpdateTitle: (itemId: number, title: string) => void
 }
 
-export default function ItineraryList({ items, onDelete, onReorder }: Props) {
+export default function ItineraryList({ items, onDelete, onReorder, onUpdateTitle }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -44,7 +45,13 @@ export default function ItineraryList({ items, onDelete, onReorder }: Props) {
       <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
         <ol className="flex flex-col gap-2">
           {items.map((item, index) => (
-            <ItineraryItemCard key={item.id} item={item} index={index} onDelete={onDelete} />
+            <ItineraryItemCard
+              key={item.id}
+              item={item}
+              index={index}
+              onDelete={onDelete}
+              onUpdateTitle={onUpdateTitle}
+            />
           ))}
         </ol>
       </SortableContext>

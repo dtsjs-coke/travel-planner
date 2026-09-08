@@ -4,10 +4,12 @@ import { Link, useParams } from 'react-router-dom'
 import { APIProvider } from '@vis.gl/react-google-maps'
 import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
-import { deleteItem, listItems, reorderItems } from '../api/items'
-import ItineraryList from '../components/ItineraryList'
+import { deleteItem, reorderItems, updateItem } from '../api/items'
 import AddItemModal from '../components/AddItemModal'
-import MapView from '../components/MapView'
+import DayEditorDesktop from '../components/DayEditorDesktop'
+import DayEditorMobile from '../components/DayEditorMobile'
+import { useIsDesktop } from '../hooks/useIsDesktop'
+import { useTripItems } from '../hooks/useTripItems'
 import type { ItineraryItem } from '../types/models'
 
 const GOOGLE_MAPS_BROWSER_KEY = import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY ?? ''
@@ -16,6 +18,7 @@ export default function DayEditorPage() {
   const { tripId } = useParams<{ tripId: string }>()
   const tripIdNum = Number(tripId)
   const queryClient = useQueryClient()
+  const isDesktop = useIsDesktop()
 
   const { data: trip, isLoading: tripLoading } = useQuery({
     queryKey: ['trips', tripIdNum],
@@ -23,17 +26,16 @@ export default function DayEditorPage() {
     enabled: Number.isFinite(tripIdNum),
   })
 
-  const [selectedDayId, setSelectedDayId] = useState<number | null>(null)
-  const activeDayId = selectedDayId ?? trip?.days[0]?.id ?? null
+  const days = trip?.days ?? []
+  const { itemsByDayId, isLoading: itemsLoading } = useTripItems(days)
 
   const [newDayDate, setNewDayDate] = useState('')
   const [newDayLabel, setNewDayLabel] = useState('')
 
   const createDayMutation = useMutation({
     mutationFn: () => createDay(tripIdNum, { date: newDayDate, label: newDayLabel || undefined }),
-    onSuccess: (day) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips', tripIdNum] })
-      setSelectedDayId(day.id)
       setNewDayDate('')
       setNewDayLabel('')
     },
@@ -45,24 +47,23 @@ export default function DayEditorPage() {
     createDayMutation.mutate()
   }
 
-  const { data: items, isLoading: itemsLoading } = useQuery({
-    queryKey: ['days', activeDayId, 'items'],
-    queryFn: () => listItems(activeDayId as number),
-    enabled: activeDayId !== null,
-  })
-
-  const [showAddModal, setShowAddModal] = useState(false)
+  const [addModalDayId, setAddModalDayId] = useState<number | null>(null)
 
   const deleteItemMutation = useMutation({
-    mutationFn: (itemId: number) => deleteItem(itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['days', activeDayId, 'items'] }),
+    mutationFn: ({ itemId }: { dayId: number; itemId: number }) => deleteItem(itemId),
+    onSuccess: (_data, { dayId }) => queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] }),
   })
 
-  const itemsQueryKey = ['days', activeDayId, 'items']
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, title }: { dayId: number; itemId: number; title: string }) => updateItem(itemId, { title }),
+    onSuccess: (_data, { dayId }) => queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] }),
+  })
 
   const reorderMutation = useMutation({
-    mutationFn: (orderedItemIds: number[]) => reorderItems(activeDayId as number, orderedItemIds),
-    onMutate: async (orderedItemIds) => {
+    mutationFn: ({ dayId, orderedItemIds }: { dayId: number; orderedItemIds: number[] }) =>
+      reorderItems(dayId, orderedItemIds),
+    onMutate: async ({ dayId, orderedItemIds }) => {
+      const itemsQueryKey = ['days', dayId, 'items']
       await queryClient.cancelQueries({ queryKey: itemsQueryKey })
       const previousItems = queryClient.getQueryData<ItineraryItem[]>(itemsQueryKey)
       if (previousItems) {
@@ -77,14 +78,28 @@ export default function DayEditorPage() {
       }
       return { previousItems }
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previousItems) queryClient.setQueryData(itemsQueryKey, context.previousItems)
+    onError: (_err, { dayId }, context) => {
+      if (context?.previousItems) queryClient.setQueryData(['days', dayId, 'items'], context.previousItems)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: itemsQueryKey }),
+    onSettled: (_data, _error, { dayId }) => {
+      queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] })
+    },
   })
 
   if (tripLoading) return <p className="p-6 text-slate-500">불러오는 중...</p>
   if (!trip) return <p className="p-6 text-red-600">여행을 찾을 수 없습니다.</p>
+
+  const viewProps = {
+    days,
+    itemsByDayId,
+    itemsLoading,
+    onAddItem: (dayId: number) => setAddModalDayId(dayId),
+    onDeleteItem: (dayId: number, itemId: number) => deleteItemMutation.mutate({ dayId, itemId }),
+    onUpdateItemTitle: (dayId: number, itemId: number, title: string) =>
+      updateItemMutation.mutate({ dayId, itemId, title }),
+    onReorderItems: (dayId: number, orderedItemIds: number[]) =>
+      reorderMutation.mutate({ dayId, orderedItemIds }),
+  }
 
   return (
     <APIProvider apiKey={GOOGLE_MAPS_BROWSER_KEY}>
@@ -93,20 +108,6 @@ export default function DayEditorPage() {
         &larr; 여행 목록
       </Link>
       <h1 className="mb-4 mt-2 text-2xl font-semibold text-slate-800">{trip.name}</h1>
-
-      <div className="mb-6 flex flex-wrap gap-2">
-        {trip.days.map((day) => (
-          <button
-            key={day.id}
-            onClick={() => setSelectedDayId(day.id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              activeDayId === day.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 shadow'
-            }`}
-          >
-            {day.label || day.date}
-          </button>
-        ))}
-      </div>
 
       <form onSubmit={handleCreateDay} className="mb-6 flex flex-col gap-2 rounded-lg bg-white p-4 shadow sm:flex-row">
         <input
@@ -130,40 +131,20 @@ export default function DayEditorPage() {
         </button>
       </form>
 
-      {activeDayId === null ? (
+      {days.length === 0 ? (
         <p className="text-slate-400">먼저 날짜를 추가해주세요.</p>
+      ) : isDesktop ? (
+        <DayEditorDesktop {...viewProps} />
       ) : (
-        <>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="mb-4 rounded-md bg-slate-800 px-4 py-2 text-white"
-          >
-            + 일정 추가
-          </button>
+        <DayEditorMobile {...viewProps} />
+      )}
 
-          {itemsLoading && <p className="text-slate-500">불러오는 중...</p>}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {items && (
-              <ItineraryList
-                items={items}
-                onDelete={(itemId) => deleteItemMutation.mutate(itemId)}
-                onReorder={(orderedItemIds) => reorderMutation.mutate(orderedItemIds)}
-              />
-            )}
-            <div className="md:sticky md:top-6 md:self-start">
-              <MapView items={items ?? []} height="400px" />
-            </div>
-          </div>
-
-          {showAddModal && (
-            <AddItemModal
-              dayId={activeDayId}
-              existingItems={items ?? []}
-              onClose={() => setShowAddModal(false)}
-            />
-          )}
-        </>
+      {addModalDayId !== null && (
+        <AddItemModal
+          dayId={addModalDayId}
+          existingItems={itemsByDayId[addModalDayId] ?? []}
+          onClose={() => setAddModalDayId(null)}
+        />
       )}
     </div>
     </APIProvider>

@@ -1,6 +1,6 @@
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.services.trip_days import validate_date_range
 
@@ -83,6 +83,14 @@ class ItineraryItemCreate(BaseModel):
     cost_currency: str | None = None
     url: str | None = None
 
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("title must not be empty")
+        return stripped
+
 
 class ItineraryItemUpdate(BaseModel):
     title: str | None = None
@@ -96,6 +104,20 @@ class ItineraryItemUpdate(BaseModel):
     cost_amount: float | None = None
     cost_currency: str | None = None
     url: str | None = None
+
+    # title 필드가 요청에 아예 없으면 라우터가 model_dump(exclude_unset=True)로
+    # 걸러내므로 이 validator 자체가 호출되지 않는다(기본값 None은 validate_default
+    # 없이는 트리거되지 않음). 반대로 validator가 호출됐다는 것은 클라이언트가 값을
+    # 명시적으로 보냈다는 뜻이므로, None이든 빈/공백 문자열이든 둘 다 거부한다.
+    # (과거에는 `if value is None: return value` 조기 리턴이 있었는데, 이는
+    # 명시적으로 {"title": null}을 보낸 경우까지 통과시켜 DB NOT NULL 제약 위반으로
+    # 500 에러가 나는 버그를 유발했다.)
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str | None) -> str:
+        if value is None or not value.strip():
+            raise ValueError("title must not be empty")
+        return value.strip()
 
 
 class ItineraryItemRead(ORMModel):

@@ -31,6 +31,15 @@ export async function deleteItem(itemId: number): Promise<void> {
   await apiClient.delete(`/api/items/${itemId}`)
 }
 
+export interface ItemUpdateInput {
+  title?: string
+}
+
+export async function updateItem(itemId: number, input: ItemUpdateInput): Promise<ItineraryItem> {
+  const { data } = await apiClient.patch<ItineraryItem>(`/api/items/${itemId}`, input)
+  return data
+}
+
 export async function reorderItems(dayId: number, orderedItemIds: number[]): Promise<ItineraryItem[]> {
   const { data } = await apiClient.post<ItineraryItem[]>(`/api/days/${dayId}/items/reorder`, {
     ordered_item_ids: orderedItemIds,
