@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Trip, TripDetail } from '../types/models'
+import type { Trip, TripDetail, TripUpdateResult } from '../types/models'
 
 export interface TripCreateInput {
   name: string
@@ -32,8 +32,8 @@ export async function createTrip(input: TripCreateInput): Promise<TripDetail> {
   return data
 }
 
-export async function updateTrip(tripId: number, input: TripUpdateInput): Promise<Trip> {
-  const { data } = await apiClient.patch<Trip>(`/api/trips/${tripId}`, input)
+export async function updateTrip(tripId: number, input: TripUpdateInput): Promise<TripUpdateResult> {
+  const { data } = await apiClient.patch<TripUpdateResult>(`/api/trips/${tripId}`, input)
   return data
 }
 

@@ -1,22 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
 import { createTrip, deleteTrip, listTrips, updateTrip, type TripUpdateInput } from '../api/trips'
-import type { Trip } from '../types/models'
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const detail = err.response?.data?.detail
-    if (Array.isArray(detail) && detail.length > 0 && typeof detail[0]?.msg === 'string') {
-      return detail[0].msg
-    }
-    if (typeof detail === 'string') {
-      return detail
-    }
-  }
-  return fallback
-}
+import { extractErrorMessage } from '../lib/errors'
+import OutOfRangeDaysModal from '../components/OutOfRangeDaysModal'
+import type { OutOfRangeDay, Trip } from '../types/models'
 
 export default function TripListPage() {
   const queryClient = useQueryClient()
@@ -30,6 +18,7 @@ export default function TripListPage() {
 
   const [editingTripId, setEditingTripId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState<{ tripId: number; message: string } | null>(null)
+  const [infoMessage, setInfoMessage] = useState<{ tripId: number; message: string } | null>(null)
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -78,6 +67,11 @@ export default function TripListPage() {
     if (!window.confirm(`"${trip.name}" 여행을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return
     setDeleteError((prev) => (prev?.tripId === trip.id ? null : prev))
     deleteMutation.mutate(trip.id)
+  }
+
+  function handleStartEdit(tripId: number) {
+    setInfoMessage((prev) => (prev?.tripId === tripId ? null : prev))
+    setEditingTripId(tripId)
   }
 
   return (
@@ -149,7 +143,10 @@ export default function TripListPage() {
               key={trip.id}
               trip={trip}
               onCancel={() => setEditingTripId(null)}
-              onSaved={() => setEditingTripId(null)}
+              onSaved={(message) => {
+                setEditingTripId(null)
+                setInfoMessage(message ? { tripId: trip.id, message } : null)
+              }}
             />
           ) : (
             <li key={trip.id} className="rounded-lg bg-white p-4 shadow transition hover:bg-slate-50">
@@ -165,7 +162,7 @@ export default function TripListPage() {
                 </Link>
                 <div className="flex shrink-0 gap-2">
                   <button
-                    onClick={() => setEditingTripId(trip.id)}
+                    onClick={() => handleStartEdit(trip.id)}
                     className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
                   >
                     수정
@@ -182,6 +179,9 @@ export default function TripListPage() {
               {deleteError?.tripId === trip.id && (
                 <p className="mt-2 text-sm text-red-600">{deleteError.message}</p>
               )}
+              {infoMessage?.tripId === trip.id && (
+                <p className="mt-2 text-sm text-emerald-600">{infoMessage.message}</p>
+              )}
             </li>
           ),
         )}
@@ -196,7 +196,8 @@ export default function TripListPage() {
 interface TripEditFormProps {
   trip: Trip
   onCancel: () => void
-  onSaved: () => void
+  /** 저장 완료 후 호출. 추가된 날짜가 있으면 안내 문구를 message로 함께 전달한다. */
+  onSaved: (message?: string) => void
 }
 
 function TripEditForm({ trip, onCancel, onSaved }: TripEditFormProps) {
@@ -206,12 +207,24 @@ function TripEditForm({ trip, onCancel, onSaved }: TripEditFormProps) {
   const [startDate, setStartDate] = useState(trip.start_date ?? '')
   const [endDate, setEndDate] = useState(trip.end_date ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [outOfRangeDays, setOutOfRangeDays] = useState<OutOfRangeDay[] | null>(null)
+  const [pendingAddedCount, setPendingAddedCount] = useState(0)
+
+  function finishSaving(addedCount: number) {
+    onSaved(addedCount > 0 ? `${addedCount}일이 추가되었습니다.` : undefined)
+  }
 
   const updateMutation = useMutation({
     mutationFn: (input: TripUpdateInput) => updateTrip(trip.id, input),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['trips'] })
-      onSaved()
+      if (data.out_of_range_days.length > 0) {
+        // 범위 밖 Day가 있으면 삭제 여부를 먼저 물어야 하므로, 폼을 닫지 않고 모달을 띈다.
+        setPendingAddedCount(data.added_day_ids.length)
+        setOutOfRangeDays(data.out_of_range_days)
+      } else {
+        finishSaving(data.added_day_ids.length)
+      }
     },
     onError: (err) => {
       setError(extractErrorMessage(err, '여행 정보를 수정하지 못했습니다.'))
@@ -274,7 +287,8 @@ function TripEditForm({ trip, onCancel, onSaved }: TripEditFormProps) {
         </div>
 
         <p className="text-xs text-slate-400">
-          기간을 바꿔도 이미 만들어진 날짜(Day)는 그대로 유지됩니다 — 새로 늘어나거나 줄어들지 않습니다.
+          기간을 늘리면 부족한 날짜(Day)가 자동으로 추가됩니다. 범위 밖으로 밀려난 날짜는 바로 지워지지 않고,
+          저장 후 삭제할지 확인할 수 있습니다.
         </p>
         {dateRangePartial && (
           <p className="text-xs text-amber-600">시작일과 종료일을 둘 다 입력하거나, 둘 다 비워주세요.</p>
@@ -299,6 +313,20 @@ function TripEditForm({ trip, onCancel, onSaved }: TripEditFormProps) {
           </button>
         </div>
       </form>
+
+      {outOfRangeDays && (
+        <OutOfRangeDaysModal
+          days={outOfRangeDays}
+          onKeep={() => {
+            setOutOfRangeDays(null)
+            finishSaving(pendingAddedCount)
+          }}
+          onAllDeleted={() => {
+            setOutOfRangeDays(null)
+            finishSaving(pendingAddedCount)
+          }}
+        />
+      )}
     </li>
   )
 }

@@ -5,6 +5,7 @@ import { APIProvider } from '@vis.gl/react-google-maps'
 import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
 import { deleteItem, reorderItems, updateItem } from '../api/items'
+import { extractErrorMessage } from '../lib/errors'
 import AddItemModal from '../components/AddItemModal'
 import DayEditorDesktop from '../components/DayEditorDesktop'
 import DayEditorMobile from '../components/DayEditorMobile'
@@ -31,6 +32,7 @@ export default function DayEditorPage() {
 
   const [newDayDate, setNewDayDate] = useState('')
   const [newDayLabel, setNewDayLabel] = useState('')
+  const [createDayError, setCreateDayError] = useState<string | null>(null)
 
   const createDayMutation = useMutation({
     mutationFn: () => createDay(tripIdNum, { date: newDayDate, label: newDayLabel || undefined }),
@@ -38,12 +40,17 @@ export default function DayEditorPage() {
       queryClient.invalidateQueries({ queryKey: ['trips', tripIdNum] })
       setNewDayDate('')
       setNewDayLabel('')
+      setCreateDayError(null)
+    },
+    onError: (err) => {
+      setCreateDayError(extractErrorMessage(err, '날짜를 추가하지 못했습니다.'))
     },
   })
 
   function handleCreateDay(e: FormEvent) {
     e.preventDefault()
     if (!newDayDate) return
+    setCreateDayError(null)
     createDayMutation.mutate()
   }
 
@@ -129,6 +136,7 @@ export default function DayEditorPage() {
         >
           날짜 추가
         </button>
+        {createDayError && <p className="text-sm text-red-600 sm:w-full">{createDayError}</p>}
       </form>
 
       {days.length === 0 ? (

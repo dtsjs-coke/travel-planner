@@ -68,6 +68,27 @@ class TripDetailRead(TripRead):
     days: list[DayRead] = []
 
 
+class OutOfRangeDayRead(DayRead):
+    """수정된 여행 기간을 벗어나게 된 기존 Day. `item_count`는 그 Day에 딸린 일정 수로,
+    프론트가 "이 날짜를 지우면 일정 N개도 함께 사라진다"고 경고하는 데 쓴다."""
+
+    item_count: int
+
+
+class TripUpdateResult(TripDetailRead):
+    """`PATCH /api/trips/{id}` 응답. 기존 `TripRead` 필드를 모두 포함하는 상위집합이라
+    날짜를 안 건드리는 기존 클라이언트는 그대로 동작한다(추가 필드는 무시하면 됨).
+
+    days:              동기화 후 이 여행의 전체 Day 목록 (범위 밖 Day도 지우지 않았으므로 포함)
+    added_day_ids:     이번 PATCH로 새로 생성된 Day의 id
+    out_of_range_days: 새 기간을 벗어난 기존 Day (서버는 지우지 않음 — 프론트가 사용자에게
+                       확인받은 뒤 `DELETE /api/days/{id}`로 개별 삭제)
+    """
+
+    added_day_ids: list[int] = []
+    out_of_range_days: list[OutOfRangeDayRead] = []
+
+
 class ItineraryItemCreate(BaseModel):
     source: str = "manual"  # "google_places" | "manual"
     title: str
