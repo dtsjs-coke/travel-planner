@@ -162,3 +162,68 @@ class ItineraryItemRead(ORMModel):
 
 class ReorderItemsRequest(BaseModel):
     ordered_item_ids: list[int]
+
+
+# 체크리스트 항목 텍스트 상한. DB 컬럼 제약이 아니라 입력 검증으로만 둔다
+# ("여권 챙기기" 수준의 한 줄 메모가 용도라 200자면 충분하고, 무제한 텍스트를
+#  그대로 받으면 무료 티어 DB에 수 MB짜리 붙여넣기가 들어올 수 있다).
+MAX_CHECKLIST_TEXT_LENGTH = 200
+
+
+def _normalize_checklist_text(value: str | None) -> str:
+    """체크리스트 텍스트를 trim 정규화하고 빈 값/과도한 길이를 거부한다.
+
+    `None`도 거부한다: 이 함수를 호출하는 validator가 돌았다는 것 자체가
+    "클라이언트가 값을 명시적으로 보냈다"는 뜻이다(필드를 생략하면 라우터의
+    `model_dump(exclude_unset=True)`가 걸러내 validator가 아예 호출되지 않는다).
+    `{"text": null}`을 통과시키면 라우터가 `setattr(item, "text", None)`을 실행해
+    DB NOT NULL 위반 → 처리되지 않은 500이 된다 —
+    `ItineraryItemUpdate.title`에서 실제로 겪었던 버그라 같은 실수를 반복하지 않는다.
+    """
+    if value is None:
+        raise ValueError("text must not be empty")
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("text must not be empty")
+    if len(stripped) > MAX_CHECKLIST_TEXT_LENGTH:
+        raise ValueError(f"text must be at most {MAX_CHECKLIST_TEXT_LENGTH} characters")
+    return stripped
+
+
+class ChecklistItemCreate(BaseModel):
+    text: str
+    is_checked: bool = False
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        return _normalize_checklist_text(value)
+
+
+class ChecklistItemUpdate(BaseModel):
+    """텍스트 수정과 체크 토글을 같은 PATCH로 처리한다(둘 다 선택적, 부분 업데이트)."""
+
+    text: str | None = None
+    is_checked: bool | None = None
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: str | None) -> str:
+        return _normalize_checklist_text(value)
+
+    # text와 같은 이유로 명시적 null을 거부한다. `is_checked`는 DB에서 NOT NULL이라
+    # `{"is_checked": null}`이 통과하면 setattr(None) → 500이 된다.
+    @field_validator("is_checked")
+    @classmethod
+    def _validate_is_checked(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("is_checked must not be null")
+        return value
+
+
+class ChecklistItemRead(ORMModel):
+    id: int
+    trip_id: int
+    text: str
+    is_checked: bool
+    created_at: dt.datetime

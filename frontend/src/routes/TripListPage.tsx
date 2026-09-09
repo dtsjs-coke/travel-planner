@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { createTrip, deleteTrip, listTrips, updateTrip, type TripUpdateInput } from '../api/trips'
 import { extractErrorMessage } from '../lib/errors'
 import OutOfRangeDaysModal from '../components/OutOfRangeDaysModal'
+import TripChecklist from '../components/TripChecklist'
 import type { OutOfRangeDay, Trip } from '../types/models'
 
 export default function TripListPage() {
@@ -182,6 +183,7 @@ export default function TripListPage() {
               {infoMessage?.tripId === trip.id && (
                 <p className="mt-2 text-sm text-emerald-600">{infoMessage.message}</p>
               )}
+              <TripChecklist tripId={trip.id} />
             </li>
           ),
         )}

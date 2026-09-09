@@ -38,6 +38,15 @@ export interface TripUpdateResult extends TripDetail {
 
 export type ItemSource = 'google_places' | 'manual'
 
+/** 여행(Trip) 단위 준비물 체크리스트 항목. Day에 귀속되지 않는다(ADR-0003). */
+export interface ChecklistItem {
+  id: number
+  trip_id: number
+  text: string
+  is_checked: boolean
+  created_at: string
+}
+
 export interface ItineraryItem {
   id: number
   day_id: number

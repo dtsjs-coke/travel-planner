@@ -31,6 +31,29 @@ class Day(SQLModel, table=True):
     sort_order: int = 0
 
 
+class ChecklistItem(SQLModel, table=True):
+    """여행 단위 준비물/할 일 체크리스트 항목 ("여권 챙기기", "환전 해오기" 등).
+
+    Day가 아니라 Trip에 직접 매달린다 — 여행 전체에 걸친 준비물이라 특정 날짜에
+    귀속시킬 대상이 아니고, Day에 붙이면 기간 PATCH로 Day가 범위 밖이 됐을 때
+    준비물이 사라지거나 숨는 문제가 생긴다(ADR-0001 참고).
+
+    정렬 컬럼(`position`/`sort_order`)을 두지 않는다. 이번 스코프에 순서 변경 기능이
+    없어서 항상 생성 순서로만 조회하며, 그 순서는 `id` 오름차순과 같다.
+    (근거와 나중에 정렬이 필요해질 때의 확장 방법은 ADR-0003 참고.)
+    """
+
+    __tablename__ = "checklist_item"
+
+    id: int | None = Field(default=None, primary_key=True)
+    trip_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("trip.id", ondelete="CASCADE"), nullable=False)
+    )
+    text: str
+    is_checked: bool = False
+    created_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
+
+
 class ItineraryItem(SQLModel, table=True):
     __tablename__ = "itinerary_item"
 
