@@ -7,6 +7,7 @@ import { createDay } from '../api/days'
 import { deleteItem, moveItem, reorderItems, updateItem } from '../api/items'
 import { extractErrorMessage } from '../lib/errors'
 import AddItemModal from '../components/AddItemModal'
+import CalendarIllustration from '../components/CalendarIllustration'
 import DayEditorDesktop from '../components/DayEditorDesktop'
 import DayEditorMobile from '../components/DayEditorMobile'
 import { useIsDesktop } from '../hooks/useIsDesktop'
@@ -30,6 +31,7 @@ export default function DayEditorPage() {
   const days = trip?.days ?? []
   const { itemsByDayId, isLoading: itemsLoading } = useTripItems(days)
 
+  const [showCreateDayForm, setShowCreateDayForm] = useState(false)
   const [newDayDate, setNewDayDate] = useState('')
   const [newDayLabel, setNewDayLabel] = useState('')
   const [createDayError, setCreateDayError] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export default function DayEditorPage() {
       setNewDayDate('')
       setNewDayLabel('')
       setCreateDayError(null)
+      setShowCreateDayForm(false)
     },
     onError: (err) => {
       setCreateDayError(extractErrorMessage(err, '날짜를 추가하지 못했습니다.'))
@@ -140,28 +143,65 @@ export default function DayEditorPage() {
       </Link>
       <h1 className="mb-4 mt-2 text-2xl font-semibold text-slate-800">{trip.name}</h1>
 
-      <form onSubmit={handleCreateDay} className="mb-6 flex flex-col gap-2 rounded-lg bg-white p-4 shadow sm:flex-row">
-        <input
-          type="date"
-          value={newDayDate}
-          onChange={(e) => setNewDayDate(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
-        />
-        <input
-          value={newDayLabel}
-          onChange={(e) => setNewDayLabel(e.target.value)}
-          placeholder="라벨 (예: Day 1 - 도착)"
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={createDayMutation.isPending || !newDayDate}
-          className="rounded-md bg-slate-800 px-4 py-2 text-white disabled:opacity-50"
-        >
-          날짜 추가
-        </button>
-        {createDayError && <p className="text-sm text-red-600 sm:w-full">{createDayError}</p>}
-      </form>
+      <div className="mb-6 rounded-lg bg-white p-4 shadow">
+        {!showCreateDayForm ? (
+          <div className="flex items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={() => setShowCreateDayForm(true)}
+              className="rounded-md bg-slate-800 px-4 py-2 text-white hover:bg-slate-700"
+            >
+              + 날짜 추가
+            </button>
+            <CalendarIllustration className="w-16 shrink-0 md:w-24" />
+          </div>
+        ) : (
+          <form onSubmit={handleCreateDay} className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-slate-700">날짜 추가</p>
+              <button
+                type="button"
+                onClick={() => setShowCreateDayForm(false)}
+                className="text-sm text-slate-500 hover:text-slate-700"
+              >
+                접기 ▲
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="date"
+                value={newDayDate}
+                onChange={(e) => setNewDayDate(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+              />
+              <input
+                value={newDayLabel}
+                onChange={(e) => setNewDayLabel(e.target.value)}
+                placeholder="라벨 (예: Day 1 - 도착)"
+                className="flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateDayForm(false)}
+                  className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={createDayMutation.isPending || !newDayDate}
+                  className="rounded-md bg-slate-800 px-4 py-2 text-white disabled:opacity-50"
+                >
+                  날짜 추가
+                </button>
+              </div>
+            </div>
+            {createDayError && <p className="text-sm text-red-600">{createDayError}</p>}
+          </form>
+        )}
+      </div>
 
       {/* 데스크톱: 기존 위치(상단 고정 배너) 그대로. 모바일: 리스트 하단에서 드래그하다 실패한
           경우 상단 배너가 화면 밖이라 안 보이므로 하단 고정 배너로 표시(레이아웃만 다름, 상태/mutation은 공유). */}
