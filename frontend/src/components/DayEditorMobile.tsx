@@ -17,6 +17,7 @@ export default function DayEditorMobile({
   onDeleteItem,
   onUpdateItemTitle,
   onReorderItems,
+  onMoveItem,
 }: DayEditorViewProps) {
   const stickyRef = useRef<HTMLDivElement>(null)
   const [stickyHeight, setStickyHeight] = useState(DEFAULT_STICKY_HEIGHT)
@@ -84,9 +85,12 @@ export default function DayEditorMobile({
             </div>
             <ItineraryList
               items={itemsByDayId[day.id] ?? []}
+              days={days}
+              moveVariant="sheet"
               onDelete={(itemId) => onDeleteItem(day.id, itemId)}
               onReorder={(orderedItemIds) => onReorderItems(day.id, orderedItemIds)}
               onUpdateTitle={(itemId, title) => onUpdateItemTitle(day.id, itemId, title)}
+              onMove={(itemId, targetDayId) => onMoveItem(day.id, itemId, targetDayId, jumpToDay)}
             />
           </section>
         ))

@@ -164,6 +164,16 @@ class ReorderItemsRequest(BaseModel):
     ordered_item_ids: list[int]
 
 
+class MoveItemRequest(BaseModel):
+    """`POST /api/items/{id}/move` 요청 본문. 일정을 같은 여행의 다른 Day로 옮긴다.
+
+    삽입 위치(`position`)는 받지 않는다 — 항상 목적지 Day의 맨 뒤에 붙이고, 그 안에서의
+    순서 조정은 기존 `POST /api/days/{id}/items/reorder`가 담당한다(ADR-0004).
+    """
+
+    target_day_id: int
+
+
 # 체크리스트 항목 텍스트 상한. DB 컬럼 제약이 아니라 입력 검증으로만 둔다
 # ("여권 챙기기" 수준의 한 줄 메모가 용도라 200자면 충분하고, 무제한 텍스트를
 #  그대로 받으면 무료 티어 DB에 수 MB짜리 붙여넣기가 들어올 수 있다).

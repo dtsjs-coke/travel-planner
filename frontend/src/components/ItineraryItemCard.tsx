@@ -1,16 +1,28 @@
 import { useState, type FormEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { ItineraryItem } from '../types/models'
+import type { Day, ItineraryItem } from '../types/models'
+import MoveItemControl from './MoveItemControl'
 
 interface Props {
   item: ItineraryItem
   index: number
+  days: Day[]
+  moveVariant: 'dropdown' | 'sheet'
   onDelete: (itemId: number) => void
   onUpdateTitle: (itemId: number, title: string) => void
+  onMove: (itemId: number, targetDayId: number) => void
 }
 
-export default function ItineraryItemCard({ item, index, onDelete, onUpdateTitle }: Props) {
+export default function ItineraryItemCard({
+  item,
+  index,
+  days,
+  moveVariant,
+  onDelete,
+  onUpdateTitle,
+  onMove,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   })
@@ -103,12 +115,17 @@ export default function ItineraryItemCard({ item, index, onDelete, onUpdateTitle
           </span>
         )}
       </div>
-      <button
-        onClick={() => onDelete(item.id)}
-        className="ml-2 shrink-0 text-sm text-red-500 hover:underline"
-      >
-        삭제
-      </button>
+      <div className="ml-2 flex shrink-0 items-center gap-2">
+        <MoveItemControl
+          days={days}
+          currentDayId={item.day_id}
+          variant={moveVariant}
+          onMove={(targetDayId) => onMove(item.id, targetDayId)}
+        />
+        <button onClick={() => onDelete(item.id)} className="text-sm text-red-500 hover:underline">
+          삭제
+        </button>
+      </div>
     </li>
   )
 }

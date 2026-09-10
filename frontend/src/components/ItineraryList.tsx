@@ -8,17 +8,28 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import type { ItineraryItem } from '../types/models'
+import type { Day, ItineraryItem } from '../types/models'
 import ItineraryItemCard from './ItineraryItemCard'
 
 interface Props {
   items: ItineraryItem[]
+  days: Day[]
+  moveVariant: 'dropdown' | 'sheet'
   onDelete: (itemId: number) => void
   onReorder: (orderedItemIds: number[]) => void
   onUpdateTitle: (itemId: number, title: string) => void
+  onMove: (itemId: number, targetDayId: number) => void
 }
 
-export default function ItineraryList({ items, onDelete, onReorder, onUpdateTitle }: Props) {
+export default function ItineraryList({
+  items,
+  days,
+  moveVariant,
+  onDelete,
+  onReorder,
+  onUpdateTitle,
+  onMove,
+}: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -49,8 +60,11 @@ export default function ItineraryList({ items, onDelete, onReorder, onUpdateTitl
               key={item.id}
               item={item}
               index={index}
+              days={days}
+              moveVariant={moveVariant}
               onDelete={onDelete}
               onUpdateTitle={onUpdateTitle}
+              onMove={onMove}
             />
           ))}
         </ol>

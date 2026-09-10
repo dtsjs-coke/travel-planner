@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { APIProvider } from '@vis.gl/react-google-maps'
 import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
-import { deleteItem, reorderItems, updateItem } from '../api/items'
+import { deleteItem, moveItem, reorderItems, updateItem } from '../api/items'
 import { extractErrorMessage } from '../lib/errors'
 import AddItemModal from '../components/AddItemModal'
 import DayEditorDesktop from '../components/DayEditorDesktop'
@@ -66,6 +66,25 @@ export default function DayEditorPage() {
     onSuccess: (_data, { dayId }) => queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] }),
   })
 
+  const [moveItemError, setMoveItemError] = useState<string | null>(null)
+
+  // 낙관적 업데이트는 하지 않는다(senior-dev 권장, ADR-0004) — 원본/목적지 두 Day 캐시와
+  // 서버의 position 재번호를 동시에 흉내 내야 해서 복잡도 대비 이득이 적다.
+  const moveItemMutation = useMutation({
+    mutationFn: ({ itemId, targetDayId }: { dayId: number; itemId: number; targetDayId: number }) =>
+      moveItem(itemId, targetDayId),
+    onSuccess: (movedItem, { dayId }) => {
+      setMoveItemError(null)
+      // 원본 Day: 남은 항목들이 서버에서 position 재번호됨(ADR-0004 #4). 목적지 Day: 새 항목 추가.
+      // 같은 Day로의 no-op 이동이면 dayId === movedItem.day_id라 사실상 한 번만 무효화된다.
+      queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] })
+      queryClient.invalidateQueries({ queryKey: ['days', movedItem.day_id, 'items'] })
+    },
+    onError: (err) => {
+      setMoveItemError(extractErrorMessage(err, '일정을 옮기지 못했습니다.'))
+    },
+  })
+
   const reorderMutation = useMutation({
     mutationFn: ({ dayId, orderedItemIds }: { dayId: number; orderedItemIds: number[] }) =>
       reorderItems(dayId, orderedItemIds),
@@ -106,6 +125,11 @@ export default function DayEditorPage() {
       updateItemMutation.mutate({ dayId, itemId, title }),
     onReorderItems: (dayId: number, orderedItemIds: number[]) =>
       reorderMutation.mutate({ dayId, orderedItemIds }),
+    onMoveItem: (dayId: number, itemId: number, targetDayId: number, onMoved?: (targetDayId: number) => void) =>
+      moveItemMutation.mutate(
+        { dayId, itemId, targetDayId },
+        { onSuccess: () => onMoved?.(targetDayId) },
+      ),
   }
 
   return (
@@ -138,6 +162,10 @@ export default function DayEditorPage() {
         </button>
         {createDayError && <p className="text-sm text-red-600 sm:w-full">{createDayError}</p>}
       </form>
+
+      {moveItemError && (
+        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{moveItemError}</p>
+      )}
 
       {days.length === 0 ? (
         <p className="text-slate-400">먼저 날짜를 추가해주세요.</p>

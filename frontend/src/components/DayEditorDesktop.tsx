@@ -13,6 +13,7 @@ export default function DayEditorDesktop({
   onDeleteItem,
   onUpdateItemTitle,
   onReorderItems,
+  onMoveItem,
 }: DayEditorViewProps) {
   const [selectedDayId, setSelectedDayId] = useState<number | null>(null)
   const activeDayId = selectedDayId ?? days[0]?.id ?? null
@@ -51,9 +52,12 @@ export default function DayEditorDesktop({
             {!itemsLoading && (
               <ItineraryList
                 items={items}
+                days={days}
+                moveVariant="dropdown"
                 onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
                 onReorder={(orderedItemIds) => onReorderItems(activeDayId, orderedItemIds)}
                 onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
+                onMove={(itemId, targetDayId) => onMoveItem(activeDayId, itemId, targetDayId)}
               />
             )}
             <div className="md:sticky md:top-6 md:self-start">
