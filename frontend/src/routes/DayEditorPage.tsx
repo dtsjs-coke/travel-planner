@@ -163,8 +163,19 @@ export default function DayEditorPage() {
         {createDayError && <p className="text-sm text-red-600 sm:w-full">{createDayError}</p>}
       </form>
 
-      {moveItemError && (
+      {/* 데스크톱: 기존 위치(상단 고정 배너) 그대로. 모바일: 리스트 하단에서 드래그하다 실패한
+          경우 상단 배너가 화면 밖이라 안 보이므로 하단 고정 배너로 표시(레이아웃만 다름, 상태/mutation은 공유). */}
+      {moveItemError && isDesktop && (
         <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{moveItemError}</p>
+      )}
+      {moveItemError && !isDesktop && (
+        <button
+          type="button"
+          onClick={() => setMoveItemError(null)}
+          className="fixed inset-x-4 bottom-4 z-40 rounded-md bg-red-50 px-3 py-2 text-left text-sm text-red-600 shadow-lg ring-1 ring-red-200"
+        >
+          {moveItemError}
+        </button>
       )}
 
       {days.length === 0 ? (

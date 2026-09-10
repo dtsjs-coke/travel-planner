@@ -1,10 +1,15 @@
 import { useState } from 'react'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { getDayLabel } from '../lib/dayLabel'
+import { resolveDrop } from '../lib/dndDrop'
+import { useItineraryDndSensors } from '../hooks/useItineraryDndSensors'
 import ItineraryList from './ItineraryList'
 import MapView from './MapView'
 import type { DayEditorViewProps } from '../types/dayEditor'
 
 // 데스크톱(웹) 레이아웃 — 기존 Day 탭 클릭 + 2단 그리드 방식 그대로. 동작/화면 변화 없음.
+// DndContext는 화면에 보이는 활성 Day 하나만 감싼다(Day 탭 전환이라 다른 Day는 화면에 없음).
+// 다른 Day로 옮기려면 카드의 "다른 날로" 드롭다운을 쓴다 — ADR-0005.
 export default function DayEditorDesktop({
   days,
   itemsByDayId,
@@ -18,6 +23,14 @@ export default function DayEditorDesktop({
   const [selectedDayId, setSelectedDayId] = useState<number | null>(null)
   const activeDayId = selectedDayId ?? days[0]?.id ?? null
   const items = activeDayId !== null ? itemsByDayId[activeDayId] ?? [] : []
+  const sensors = useItineraryDndSensors()
+
+  function handleDragEnd(event: DragEndEvent) {
+    if (activeDayId === null) return
+    // 활성 Day의 항목만 DndContext 안에 있으므로 결과는 항상 reorder(또는 변화 없음)다.
+    const result = resolveDrop(event.active.id, event.over?.id, { [activeDayId]: items })
+    if (result?.kind === 'reorder') onReorderItems(result.dayId, result.orderedItemIds)
+  }
 
   return (
     <>
@@ -50,15 +63,17 @@ export default function DayEditorDesktop({
 
           <div className="grid gap-4 md:grid-cols-2">
             {!itemsLoading && (
-              <ItineraryList
-                items={items}
-                days={days}
-                moveVariant="dropdown"
-                onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
-                onReorder={(orderedItemIds) => onReorderItems(activeDayId, orderedItemIds)}
-                onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
-                onMove={(itemId, targetDayId) => onMoveItem(activeDayId, itemId, targetDayId)}
-              />
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <ItineraryList
+                  items={items}
+                  dayId={activeDayId}
+                  days={days}
+                  moveVariant="dropdown"
+                  onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
+                  onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
+                  onMove={(itemId, targetDayId) => onMoveItem(activeDayId, itemId, targetDayId)}
+                />
+              </DndContext>
             )}
             <div className="md:sticky md:top-6 md:self-start">
               <MapView items={items} height="400px" />
