@@ -63,5 +63,56 @@ export interface ItineraryItem {
   notes: string | null
   cost_amount: number | null
   cost_currency: string | null
+  /** 결제자 **슬롯 키**("participant_1"/"participant_2") 또는 미지정(null). 표시 이름이 아니다 —
+   * 이름은 `/api/settings`(`AppSettings`)에서 조회해 붙인다(ADR-0007). */
+  paid_by: string | null
   url: string | null
+}
+
+/** 마스터 환경설정의 참가자 한 명. `key`는 저장/전송에, `name`은 표시에 쓴다. */
+export interface Participant {
+  key: string
+  name: string
+}
+
+export interface AppSettings {
+  participants: Participant[]
+}
+
+export interface ParticipantTotal {
+  participant: Participant
+  paid: number
+  item_count: number
+}
+
+/** "from_participant가 to_participant에게 amount를 주면 정산 끝". */
+export interface Transfer {
+  from_participant: Participant
+  to_participant: Participant
+  amount: number
+}
+
+export interface CurrencyBucket {
+  currency: string
+  amount: number
+  item_count: number
+}
+
+/** `GET /api/trips/{trip_id}/settlement` 응답. 저장되지 않고 매번 계산된다(ADR-0006).
+ *
+ * `transfer`가 null이면 정산할 것이 없다는 뜻(에러 아님). `unassigned_*`/`excluded_currencies`는
+ * 정산에서 제외된 지출이라 화면에 반드시 안내해야 한다(결제자 미지정 / 통화 혼합).
+ */
+export interface SettlementResult {
+  trip_id: number
+  currency: string
+  participants: Participant[]
+  per_person: ParticipantTotal[]
+  total: number
+  per_person_share: number
+  transfer: Transfer | null
+  unassigned_amount: number
+  unassigned_item_count: number
+  excluded_currencies: CurrencyBucket[]
+  has_mixed_currency: boolean
 }

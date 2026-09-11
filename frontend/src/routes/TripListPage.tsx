@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { createTrip, deleteTrip, listTrips, updateTrip, type TripUpdateInput } from '../api/trips'
 import { extractErrorMessage } from '../lib/errors'
+import AppSettingsModal from '../components/AppSettingsModal'
 import OutOfRangeDaysModal from '../components/OutOfRangeDaysModal'
 import TripChecklist from '../components/TripChecklist'
+import TripSettlement from '../components/TripSettlement'
 import TravelIllustration from '../components/TravelIllustration'
 import type { OutOfRangeDay, Trip } from '../types/models'
 
@@ -12,6 +14,7 @@ export default function TripListPage() {
   const queryClient = useQueryClient()
   const { data: trips, isLoading } = useQuery({ queryKey: ['trips'], queryFn: listTrips })
 
+  const [showSettings, setShowSettings] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [name, setName] = useState('')
   const [destination, setDestination] = useState('')
@@ -80,7 +83,19 @@ export default function TripListPage() {
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl p-6">
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">여행 목록</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-800">여행 목록</h1>
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          aria-label="마스터 환경설정"
+          title="마스터 환경설정"
+          className="rounded-md p-2 text-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+        >
+          ⚙️
+        </button>
+      </div>
+      {showSettings && <AppSettingsModal onClose={() => setShowSettings(false)} />}
 
       <div className="mb-6 rounded-lg bg-white p-4 shadow">
         {!showCreateForm ? (
@@ -222,6 +237,7 @@ export default function TripListPage() {
                 <p className="mt-2 text-sm text-emerald-600">{infoMessage.message}</p>
               )}
               <TripChecklist tripId={trip.id} />
+              <TripSettlement tripId={trip.id} />
             </li>
           ),
         )}

@@ -4,7 +4,8 @@ import { Link, useParams } from 'react-router-dom'
 import { APIProvider } from '@vis.gl/react-google-maps'
 import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
-import { deleteItem, moveItem, reorderItems, updateItem } from '../api/items'
+import { deleteItem, moveItem, reorderItems, updateItem, type ItemUpdateInput } from '../api/items'
+import { getSettings } from '../api/settings'
 import { extractErrorMessage } from '../lib/errors'
 import AddItemModal from '../components/AddItemModal'
 import CalendarIllustration from '../components/CalendarIllustration'
@@ -30,6 +31,11 @@ export default function DayEditorPage() {
 
   const days = trip?.days ?? []
   const { itemsByDayId, isLoading: itemsLoading } = useTripItems(days)
+
+  // 결제자 선택박스/표시에 쓰는 참가자 목록. 이름이 바뀌면 `['settings']`만 무효화해도
+  // 여기서 자동으로 새 이름을 받아온다(ADR-0007) — 일정 캐시를 따로 건드릴 필요가 없다.
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
+  const participants = settings?.participants ?? []
 
   const [showCreateDayForm, setShowCreateDayForm] = useState(false)
   const [newDayDate, setNewDayDate] = useState('')
@@ -64,8 +70,12 @@ export default function DayEditorPage() {
     onSuccess: (_data, { dayId }) => queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] }),
   })
 
+  // 제목 수정과 비용/결제자 수정을 같은 mutation으로 처리한다(둘 다 `PATCH /api/items/{id}`).
+  // 콜백을 분리해둔 이유는 검증 방향이 반대이기 때문 — title은 명시적 null을 거부하지만
+  // cost_amount/paid_by는 null이 "지운다"는 정상 조작이다(ADR-0006).
   const updateItemMutation = useMutation({
-    mutationFn: ({ itemId, title }: { dayId: number; itemId: number; title: string }) => updateItem(itemId, { title }),
+    mutationFn: ({ itemId, patch }: { dayId: number; itemId: number; patch: ItemUpdateInput }) =>
+      updateItem(itemId, patch),
     onSuccess: (_data, { dayId }) => queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] }),
   })
 
@@ -122,10 +132,16 @@ export default function DayEditorPage() {
     days,
     itemsByDayId,
     itemsLoading,
+    participants,
     onAddItem: (dayId: number) => setAddModalDayId(dayId),
     onDeleteItem: (dayId: number, itemId: number) => deleteItemMutation.mutate({ dayId, itemId }),
     onUpdateItemTitle: (dayId: number, itemId: number, title: string) =>
-      updateItemMutation.mutate({ dayId, itemId, title }),
+      updateItemMutation.mutate({ dayId, itemId, patch: { title } }),
+    onUpdateItem: (dayId: number, itemId: number, patch: ItemUpdateInput, onError?: (message: string) => void) =>
+      updateItemMutation.mutate(
+        { dayId, itemId, patch },
+        { onError: (err) => onError?.(extractErrorMessage(err, '수정하지 못했습니다.')) },
+      ),
     onReorderItems: (dayId: number, orderedItemIds: number[]) =>
       reorderMutation.mutate({ dayId, orderedItemIds }),
     onMoveItem: (dayId: number, itemId: number, targetDayId: number, onMoved?: (targetDayId: number) => void) =>

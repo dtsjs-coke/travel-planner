@@ -1,7 +1,8 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { dayDroppableId } from '../lib/dndDrop'
-import type { Day, ItineraryItem } from '../types/models'
+import type { Day, ItineraryItem, Participant } from '../types/models'
+import type { ItineraryItemPatch } from '../types/dayEditor'
 import ItineraryItemCard from './ItineraryItemCard'
 
 interface Props {
@@ -10,8 +11,10 @@ interface Props {
   dayId: number
   days: Day[]
   moveVariant: 'dropdown' | 'sheet'
+  participants: Participant[]
   onDelete: (itemId: number) => void
   onUpdateTitle: (itemId: number, title: string) => void
+  onUpdateItem: (itemId: number, patch: ItineraryItemPatch, onError?: (message: string) => void) => void
   onMove: (itemId: number, targetDayId: number) => void
 }
 
@@ -25,8 +28,10 @@ export default function ItineraryList({
   dayId,
   days,
   moveVariant,
+  participants,
   onDelete,
   onUpdateTitle,
+  onUpdateItem,
   onMove,
 }: Props) {
   // 항목이 없는 Day는 드롭 대상으로 삼을 항목 droppable이 하나도 없어서 드래그로 옮겨올 수가 없다.
@@ -52,8 +57,10 @@ export default function ItineraryList({
             index={index}
             days={days}
             moveVariant={moveVariant}
+            participants={participants}
             onDelete={onDelete}
             onUpdateTitle={onUpdateTitle}
+            onUpdateItem={onUpdateItem}
             onMove={onMove}
           />
         ))}

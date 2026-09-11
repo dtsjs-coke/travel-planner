@@ -46,9 +46,11 @@ export default function DayEditorMobile({
   days,
   itemsByDayId,
   itemsLoading,
+  participants,
   onAddItem,
   onDeleteItem,
   onUpdateItemTitle,
+  onUpdateItem,
   onReorderItems,
   onMoveItem,
 }: DayEditorViewProps) {
@@ -180,8 +182,10 @@ export default function DayEditorMobile({
               dayId={day.id}
               days={days}
               moveVariant="sheet"
+              participants={participants}
               onDelete={(itemId) => onDeleteItem(day.id, itemId)}
               onUpdateTitle={(itemId, title) => onUpdateItemTitle(day.id, itemId, title)}
+              onUpdateItem={(itemId, patch, onError) => onUpdateItem(day.id, itemId, patch, onError)}
               onMove={(itemId, targetDayId) => onMoveItem(day.id, itemId, targetDayId, jumpToDay)}
             />
           </section>

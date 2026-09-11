@@ -14,9 +14,11 @@ export default function DayEditorDesktop({
   days,
   itemsByDayId,
   itemsLoading,
+  participants,
   onAddItem,
   onDeleteItem,
   onUpdateItemTitle,
+  onUpdateItem,
   onReorderItems,
   onMoveItem,
 }: DayEditorViewProps) {
@@ -69,8 +71,10 @@ export default function DayEditorDesktop({
                   dayId={activeDayId}
                   days={days}
                   moveVariant="dropdown"
+                  participants={participants}
                   onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
                   onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
+                  onUpdateItem={(itemId, patch, onError) => onUpdateItem(activeDayId, itemId, patch, onError)}
                   onMove={(itemId, targetDayId) => onMoveItem(activeDayId, itemId, targetDayId)}
                 />
               </DndContext>

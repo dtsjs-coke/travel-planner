@@ -14,6 +14,8 @@ export interface ItemCreateInput {
   notes?: string
   cost_amount?: number
   cost_currency?: string
+  /** 결제자 **슬롯 키**("participant_1"/"participant_2"). 이름 문자열을 보내면 422(ADR-0007). */
+  paid_by?: string
   url?: string
 }
 
@@ -33,6 +35,11 @@ export async function deleteItem(itemId: number): Promise<void> {
 
 export interface ItemUpdateInput {
   title?: string
+  /** 명시적 `null`은 "지운다"는 뜻으로 서버가 200 처리한다(nullable 컬럼, ADR-0006). */
+  cost_amount?: number | null
+  cost_currency?: string | null
+  /** 슬롯 키 또는 `null`(미지정으로 되돌리기). 이름 문자열은 422. */
+  paid_by?: string | null
 }
 
 export async function updateItem(itemId: number, input: ItemUpdateInput): Promise<ItineraryItem> {

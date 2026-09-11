@@ -4,6 +4,32 @@ from sqlalchemy import Column, ForeignKey, Integer, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
+class AppSettings(SQLModel, table=True):
+    """앱 전역 설정 — **항상 최대 한 행**(`id=1`)만 존재하는 싱글턴 테이블.
+
+    `app/config.py`의 `Settings`(pydantic-settings)와 혼동하지 말 것. 그쪽은 `.env`/환경변수라
+    **재배포해야 바뀌고 배포 환경마다 달라지는 값**(DB URL, 시크릿, CORS)이다. 이 테이블은
+    반대로 **두 사용자가 화면에서 실시간으로 바꾸는 값**이라 DB에 있어야 한다(ADR-0007).
+
+    참가자 이름은 여행(Trip)별이 아니라 앱 전역이다 — 같은 두 사람이 모든 여행을 함께 쓰므로
+    여행마다 이름을 따로 두면 이름 변경이 여행 수만큼의 조작이 된다.
+
+    설정 항목이 늘면 컬럼을 추가한다. key-value 테이블로 만들지 않은 이유는 ADR-0007 참고.
+    """
+
+    __tablename__ = "app_settings"
+
+    # `id`는 항상 1이다(싱글턴). 서비스 레이어(`services/app_settings.py`)가 이 값을 고정해서
+    # 읽고 쓰므로, 두 요청이 동시에 첫 행을 만들려 해도 두 번째는 PK 충돌로 실패하고 재조회한다.
+    id: int | None = Field(default=None, primary_key=True)
+    # 참가자 슬롯 "participant_1" / "participant_2"의 현재 표시 이름.
+    # 아래 기본값이 이 앱에서 참가자 이름의 유일한 기본값 정의다 — 행이 아직 없을 때
+    # `load_participants()`가 이 모델을 그대로 인스턴스화해서 기본값을 얻는다(중복 정의 방지).
+    participant_1_name: str = "희경"
+    participant_2_name: str = "재승"
+    updated_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
+
+
 class Trip(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
@@ -74,6 +100,14 @@ class ItineraryItem(SQLModel, table=True):
     notes: str | None = None
     cost_amount: float | None = None
     cost_currency: str | None = None
+    # 이 비용을 결제한 사람의 **참가자 슬롯 키**("participant_1"/"participant_2").
+    # NULL = 미지정(정산에서 제외). 표시 이름이 아니라 키를 저장하는 이유는 ADR-0007 참고 —
+    # 이름은 `AppSettings`에서 언제든 바뀔 수 있는 런타임 값이라, 여기에 이름을 넣으면
+    # 이름을 바꿀 때마다 이 컬럼 전체를 다시 써야 한다.
+    # 허용값(PARTICIPANT_KEYS)은 애플리케이션 레벨(schemas.py)에서만 검증한다 — 슬롯이 늘거나
+    # 줄 일이 없어 CHECK 제약의 이득이 거의 없고, 모르는 값은 정산에서 "미지정"으로 안전하게
+    # 퇴화한다.
+    paid_by: str | None = None
     url: str | None = None
     created_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
     updated_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)

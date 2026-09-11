@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createItem, type ItemCreateInput } from '../api/items'
 import { searchPlaces, type PlaceSearchResult } from '../api/places'
+import { getSettings } from '../api/settings'
+import { extractErrorMessage } from '../lib/errors'
 import MapView from './MapView'
 import type { ItineraryItem } from '../types/models'
 
@@ -24,11 +26,20 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
   const [searchError, setSearchError] = useState(false)
 
   const [manualTitle, setManualTitle] = useState('')
+  const [manualCostAmount, setManualCostAmount] = useState('')
+  const [manualPaidBy, setManualPaidBy] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+
+  // 결제자 선택박스는 이름을 하드코딩하지 않고 마스터 환경설정에서 가져온다(ADR-0007).
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
 
   const addMutation = useMutation({
     mutationFn: (input: ItemCreateInput) => createItem(dayId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsQueryKey })
+    },
+    onError: (err) => {
+      setAddError(extractErrorMessage(err, '일정을 추가하지 못했습니다.'))
     },
   })
 
@@ -48,6 +59,7 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
   }
 
   function handleAddFromGoogle(place: PlaceSearchResult) {
+    setAddError(null)
     addMutation.mutate({
       source: 'google_places',
       title: place.name,
@@ -61,8 +73,25 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
   function handleAddManual(e: FormEvent) {
     e.preventDefault()
     if (!manualTitle.trim()) return
-    addMutation.mutate({ source: 'manual', title: manualTitle })
-    setManualTitle('')
+    const trimmedCost = manualCostAmount.trim()
+    setAddError(null)
+    addMutation.mutate(
+      {
+        source: 'manual',
+        title: manualTitle,
+        // 통화 입력란은 만들지 않는다 — 비워두면 서버가 여행 기준 통화로 처리한다(senior-dev 권장).
+        cost_amount: trimmedCost ? Number(trimmedCost) : undefined,
+        paid_by: manualPaidBy || undefined,
+      },
+      {
+        // 성공했을 때만 입력창을 비운다 — 실패 시 값을 남겨둬야 사용자가 고쳐서 재시도할 수 있다.
+        onSuccess: () => {
+          setManualTitle('')
+          setManualCostAmount('')
+          setManualPaidBy('')
+        },
+      },
+    )
   }
 
   return (
@@ -89,6 +118,10 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
             직접 입력
           </button>
         </div>
+
+        {addError && (
+          <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{addError}</p>
+        )}
 
         {tab === 'google' ? (
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
@@ -148,14 +181,34 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleAddManual} className="flex gap-2">
+          <form onSubmit={handleAddManual} className="flex flex-wrap gap-2">
             <input
               value={manualTitle}
               onChange={(e) => setManualTitle(e.target.value)}
               placeholder="일정 이름 (예: 호텔 체크인)"
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
               autoFocus
             />
+            <input
+              type="number"
+              min="0"
+              value={manualCostAmount}
+              onChange={(e) => setManualCostAmount(e.target.value)}
+              placeholder="금액 (선택)"
+              className="w-28 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+            />
+            <select
+              value={manualPaidBy}
+              onChange={(e) => setManualPaidBy(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-2 text-sm text-slate-700 focus:border-slate-500 focus:outline-none"
+            >
+              <option value="">미지정</option>
+              {settings?.participants.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               disabled={addMutation.isPending || !manualTitle.trim()}
