@@ -12,6 +12,7 @@ from app.config import settings
 from app.routers.app_settings import router as app_settings_router
 from app.routers.checklist import router as checklist_router
 from app.routers.days import router as days_router
+from app.routers.export import router as export_router
 from app.routers.items import router as items_router
 from app.routers.places import router as places_router
 from app.routers.settlement import router as settlement_router
@@ -34,6 +35,7 @@ app.include_router(items_router)
 app.include_router(checklist_router)
 app.include_router(settlement_router)
 app.include_router(app_settings_router)
+app.include_router(export_router)
 app.include_router(places_router)
 
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { createTrip, deleteTrip, listTrips, updateTrip, type TripUpdateInput } from '../api/trips'
+import { API_BASE_URL } from '../api/client'
 import { extractErrorMessage } from '../lib/errors'
 import AppSettingsModal from '../components/AppSettingsModal'
 import OutOfRangeDaysModal from '../components/OutOfRangeDaysModal'
@@ -215,6 +216,13 @@ export default function TripListPage() {
                   )}
                 </Link>
                 <div className="flex shrink-0 gap-2">
+                  <a
+                    href={`${API_BASE_URL}/api/trips/${trip.id}/export.ics`}
+                    title="캘린더로 내보내기 (.ics) — 받은 파일을 구글 캘린더 가져오기에서 열면 됩니다. 시간을 입력하지 않은 일정은 종일 일정으로 들어갑니다."
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                  >
+                    📅 내보내기
+                  </a>
                   <button
                     onClick={() => handleStartEdit(trip.id)}
                     className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
