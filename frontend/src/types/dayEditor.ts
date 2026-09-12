@@ -16,6 +16,9 @@ export interface DayEditorViewProps {
   days: Day[]
   itemsByDayId: Record<number, ItineraryItem[]>
   itemsLoading: boolean
+  /** 일정 조회가 실패한 Day id 목록(`useTripItems`). 해당 Day 영역에 빈 상태와 구분되는
+   * 에러 안내를 표시하는 데 쓴다. */
+  itemsErrorDayIds: number[]
   /** 결제자 선택박스/표시에 쓰는 참가자 목록(`GET /api/settings`). 이름이 바뀌면 이 배열도
    * 자동으로 갱신되므로 일정 응답(`paid_by` 키)과 조합해 표시 이름을 구한다(ADR-0007). */
   participants: Participant[]

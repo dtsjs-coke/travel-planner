@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseActiveDayOnScrollResult {
   activeDayId: number | null
-  registerSection: (el: HTMLElement | null) => void // 각 Day 섹션의 ref로 넘김
+  registerSection: (dayId: number, el: HTMLElement | null) => void // 각 Day 섹션의 ref로 넘김
 }
 
 interface EntryState {
@@ -18,13 +18,22 @@ interface EntryState {
 export function useActiveDayOnScroll(dayIds: number[], topOffsetPx: number): UseActiveDayOnScrollResult {
   const [activeDayId, setActiveDayId] = useState<number | null>(null)
   const entriesRef = useRef<Map<number, EntryState>>(new Map())
-  const elementsRef = useRef<Set<HTMLElement>>(new Set())
+  // dayId별로 등록된 엘리먼트를 추적한다(단순 Set이면 언마운트 시 어떤 엘리먼트가 사라졌는지
+  // 알 수 없다 — ref 콜백은 el===null로만 호출되고 이전 노드를 넘겨주지 않기 때문).
+  const elementsRef = useRef<Map<number, HTMLElement>>(new Map())
   const observerRef = useRef<IntersectionObserver | null>(null)
 
-  const registerSection = useCallback((el: HTMLElement | null) => {
+  const registerSection = useCallback((dayId: number, el: HTMLElement | null) => {
     if (el) {
-      elementsRef.current.add(el)
+      elementsRef.current.set(dayId, el)
       observerRef.current?.observe(el)
+    } else {
+      // 컴포넌트 언마운트(예: 나중에 생길 Day 삭제 기능)로 React가 ref 콜백을 null로 호출한 경우.
+      // observer 구독을 해제하고 내부 상태에서도 지워야 메모리 누수/유령 항목을 막을 수 있다.
+      const prevEl = elementsRef.current.get(dayId)
+      if (prevEl) observerRef.current?.unobserve(prevEl)
+      elementsRef.current.delete(dayId)
+      entriesRef.current.delete(dayId)
     }
   }, [])
 

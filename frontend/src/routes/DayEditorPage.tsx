@@ -30,7 +30,7 @@ export default function DayEditorPage() {
   })
 
   const days = trip?.days ?? []
-  const { itemsByDayId, isLoading: itemsLoading } = useTripItems(days)
+  const { itemsByDayId, isLoading: itemsLoading, errorDayIds: itemsErrorDayIds } = useTripItems(days)
 
   // 결제자 선택박스/표시에 쓰는 참가자 목록. 이름이 바뀌면 `['settings']`만 무효화해도
   // 여기서 자동으로 새 이름을 받아온다(ADR-0007) — 일정 캐시를 따로 건드릴 필요가 없다.
@@ -132,6 +132,7 @@ export default function DayEditorPage() {
     days,
     itemsByDayId,
     itemsLoading,
+    itemsErrorDayIds,
     participants,
     onAddItem: (dayId: number) => setAddModalDayId(dayId),
     onDeleteItem: (dayId: number, itemId: number) => deleteItemMutation.mutate({ dayId, itemId }),

@@ -6,6 +6,9 @@ interface UseTripItemsResult {
   itemsByDayId: Record<number, ItineraryItem[]>
   isLoading: boolean
   isError: boolean
+  /** 조회가 실패한 Day의 id 목록. 화면에서 "일정이 없는 빈 Day"와 "로드 실패"를 구분해
+   * 보여주는 데 쓴다(Day별 안내라 집계값인 `isError`만으로는 어느 Day인지 알 수 없다). */
+  errorDayIds: number[]
 }
 
 /**
@@ -29,8 +32,13 @@ export function useTripItems(days: Day[]): UseTripItemsResult {
     itemsByDayId[day.id] = results[index]?.data ?? []
   })
 
-  const isLoading = results.some((result) => result.isLoading)
+  // ADR 문서(모바일 연속 스크롤, docs/PROJECT.md Architecture Decisions)는 `isPending` 기준으로
+  // 적혀있다. `isLoading`은 TanStack Query v5에서 `isPending && isFetching`의 축약형이라
+  // `fetchStatus: 'paused'`(예: 오프라인)일 때 `isPending`이 true여도 `isLoading`은 false가 되어
+  // 로딩 중인데도 로딩 표시가 조기에 꺼질 수 있다 — 문서와 실제 동작을 일치시키기 위해 `isPending` 사용.
+  const isLoading = results.some((result) => result.isPending)
   const isError = results.some((result) => result.isError)
+  const errorDayIds = days.filter((_day, index) => results[index]?.isError).map((day) => day.id)
 
-  return { itemsByDayId, isLoading, isError }
+  return { itemsByDayId, isLoading, isError, errorDayIds }
 }

@@ -46,6 +46,7 @@ export default function DayEditorMobile({
   days,
   itemsByDayId,
   itemsLoading,
+  itemsErrorDayIds,
   participants,
   onAddItem,
   onDeleteItem,
@@ -164,7 +165,7 @@ export default function DayEditorMobile({
             key={day.id}
             data-day-id={day.id}
             data-drop-target={dropTargetDayId === day.id ? 'true' : undefined}
-            ref={registerSection}
+            ref={(el) => registerSection(day.id, el)}
             style={{ scrollMarginTop: stickyHeight + 8 }}
             className="-mx-2 rounded-lg px-2 pt-4 pb-2 ring-2 ring-transparent transition-colors last:pb-[300px] data-[drop-target]:bg-slate-50 data-[drop-target]:ring-slate-400"
           >
@@ -183,6 +184,7 @@ export default function DayEditorMobile({
               days={days}
               moveVariant="sheet"
               participants={participants}
+              hasError={itemsErrorDayIds.includes(day.id)}
               onDelete={(itemId) => onDeleteItem(day.id, itemId)}
               onUpdateTitle={(itemId, title) => onUpdateItemTitle(day.id, itemId, title)}
               onUpdateItem={(itemId, patch, onError) => onUpdateItem(day.id, itemId, patch, onError)}

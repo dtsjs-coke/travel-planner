@@ -10,6 +10,24 @@ from app.services.trip_days import validate_date_range
 # 상한이 없으면 한 사람이 레이아웃을 깨뜨릴 수 있다. 닉네임 용도라 넉넉히 20자.
 MAX_PARTICIPANT_NAME_LENGTH = 20
 
+# 여행 이름 길이 상한. DB 컬럼 제약이 아니라 입력 검증으로만 둔다(ChecklistItem.text와
+# 같은 패턴, 마이그레이션 불필요). 여행 목록 카드 제목/탭 타이틀에 그대로 렌더링되는
+# 짧은 라벨이라 100자면 충분하고, 없으면 무료 티어 DB에 수 MB짜리 붙여넣기가 들어올 수
+# 있다(2026-09-07 qa 발견, Backlog Tier 2).
+MAX_TRIP_NAME_LENGTH = 100
+
+# 일정 제목 길이 상한. 위 MAX_TRIP_NAME_LENGTH와 같은 이유. 구글 플레이스 이름처럼
+# 다소 긴 값도 들어올 수 있어 여행 이름보다 여유를 조금 더 둔다.
+MAX_ITINERARY_ITEM_TITLE_LENGTH = 150
+
+
+def _validate_name_length(value: str, *, field_label: str, max_length: int) -> str:
+    """이름/제목류 필드의 길이 상한을 검증한다(trim 등 다른 정규화는 하지 않는다 —
+    기존 name/title 필드의 공백 처리 정책을 이 김에 바꾸지 않기 위함)."""
+    if len(value) > max_length:
+        raise ValueError(f"{field_label} must be at most {max_length} characters")
+    return value
+
 
 def _normalize_paid_by(value: str | None) -> str | None:
     """결제자를 검증/정규화한다. 허용값은 참가자 **슬롯 키** 또는 "미지정"(None).
@@ -79,6 +97,13 @@ class TripCreate(BaseModel):
     end_date: dt.date | None = None
     currency: str = "KRW"
 
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        return _validate_name_length(
+            value, field_label="name", max_length=MAX_TRIP_NAME_LENGTH
+        )
+
     @model_validator(mode="after")
     def _validate_date_range(self):
         # 두 날짜가 모두 있으면 서버가 그 범위만큼 Day를 자동 생성하므로 여기서 범위를 검증한다.
@@ -96,6 +121,20 @@ class TripUpdate(BaseModel):
     # 날짜 검증은 여기서 못 한다: PATCH는 부분 업데이트라 요청에 한쪽 날짜만 올 수 있고,
     # 그때는 DB에 저장된 기존 값과 합쳐야 최종 기간이 정해진다.
     # → `update_trip` 라우터가 병합 후 validate_date_range()를 호출한다.
+
+    # `name`은 NOT NULL 컬럼이라 `ItineraryItemUpdate.title`과 같은 이유로 명시적 null을
+    # 거부한다. validator가 호출됐다는 것 자체가 클라이언트가 값을 명시적으로 보냈다는
+    # 뜻이다(필드를 생략하면 라우터의 model_dump(exclude_unset=True)가 걸러내 validator가
+    # 아예 호출되지 않는다). 이걸 막지 않으면 `{"name": null}`이 setattr(trip, "name", None)로
+    # 이어져 DB NOT NULL 위반 500이 난다(title에서 실제로 겪었던 버그와 같은 함정).
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("name must not be null")
+        return _validate_name_length(
+            value, field_label="name", max_length=MAX_TRIP_NAME_LENGTH
+        )
 
 
 class TripRead(ORMModel):
@@ -174,7 +213,9 @@ class ItineraryItemCreate(BaseModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("title must not be empty")
-        return stripped
+        return _validate_name_length(
+            stripped, field_label="title", max_length=MAX_ITINERARY_ITEM_TITLE_LENGTH
+        )
 
     @field_validator("cost_amount")
     @classmethod
@@ -218,7 +259,9 @@ class ItineraryItemUpdate(BaseModel):
     def _validate_title(cls, value: str | None) -> str:
         if value is None or not value.strip():
             raise ValueError("title must not be empty")
-        return value.strip()
+        return _validate_name_length(
+            value.strip(), field_label="title", max_length=MAX_ITINERARY_ITEM_TITLE_LENGTH
+        )
 
     # `cost_amount`/`cost_currency`/`paid_by`는 title과 달리 **명시적 null을 허용**한다
     # (셋 다 nullable 컬럼이고, "비용/결제자를 지웠다"는 정상적인 수정이다).

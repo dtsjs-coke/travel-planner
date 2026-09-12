@@ -14,6 +14,7 @@ export default function DayEditorDesktop({
   days,
   itemsByDayId,
   itemsLoading,
+  itemsErrorDayIds,
   participants,
   onAddItem,
   onDeleteItem,
@@ -72,6 +73,7 @@ export default function DayEditorDesktop({
                   days={days}
                   moveVariant="dropdown"
                   participants={participants}
+                  hasError={itemsErrorDayIds.includes(activeDayId)}
                   onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
                   onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
                   onUpdateItem={(itemId, patch, onError) => onUpdateItem(activeDayId, itemId, patch, onError)}

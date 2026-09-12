@@ -12,6 +12,9 @@ interface Props {
   days: Day[]
   moveVariant: 'dropdown' | 'sheet'
   participants: Participant[]
+  /** 이 Day의 일정 조회가 실패했는지(`useTripItems`). 빈 목록일 때 "일정이 없습니다"
+   * 대신 "불러오지 못했습니다" 안내를 보여주는 데만 쓴다. */
+  hasError?: boolean
   onDelete: (itemId: number) => void
   onUpdateTitle: (itemId: number, title: string) => void
   onUpdateItem: (itemId: number, patch: ItineraryItemPatch, onError?: (message: string) => void) => void
@@ -29,6 +32,7 @@ export default function ItineraryList({
   days,
   moveVariant,
   participants,
+  hasError = false,
   onDelete,
   onUpdateTitle,
   onUpdateItem,
@@ -41,8 +45,8 @@ export default function ItineraryList({
 
   if (items.length === 0) {
     return (
-      <p ref={setNodeRef} className="py-3 text-slate-400">
-        등록된 일정이 없습니다. 위에서 추가해보세요.
+      <p ref={setNodeRef} className={`py-3 ${hasError ? 'text-red-600' : 'text-slate-400'}`}>
+        {hasError ? '일정을 불러오지 못했습니다.' : '등록된 일정이 없습니다. 위에서 추가해보세요.'}
       </p>
     )
   }
