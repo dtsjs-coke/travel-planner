@@ -69,6 +69,11 @@ const EXACT_MESSAGES: Record<string, string> = {
   // --- 구글 장소 검색 서버 설정 (app/services/google_places.py) ---
   'GOOGLE_PLACES_SERVER_KEY is not configured':
     '장소 검색 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요.',
+
+  // --- AI 여행 추천 (app/routers/ai_suggestion.py, app/services/ai_trip_suggestion.py, ADR-0009) ---
+  'GEMINI_API_KEY is not configured':
+    'AI 추천 기능이 아직 설정되지 않았습니다(관리자 확인 필요).',
+  'AI suggestion failed for all plans': 'AI 추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.',
 }
 
 /** 상한값 등 동적 값이 메시지 안에 섞여 있어 정규식으로 값만 뽑아 문장에 끼워 넣는 경우. */
@@ -136,6 +141,33 @@ const DYNAMIC_MESSAGE_RULES: Array<{
   {
     pattern: /^Google Places? (search|details) failed:/,
     translate: () => '구글 장소 검색에 실패했습니다. 잠시 후 다시 시도해주세요.',
+  },
+
+  // --- AI 여행 추천 (app/schemas.py: AI 전용 상한 검증, ADR-0009 결정 3) ---
+  // f"ai suggestion cannot span more than {AI_SUGGESTION_MAX_DAYS} days"
+  {
+    pattern: /^ai suggestion cannot span more than (\d+) days$/,
+    translate: (m) => `AI 추천은 최대 ${m[1]}일까지의 여행만 만들 수 있습니다.`,
+  },
+  // f"at most {AI_SUGGESTION_MAX_CITIES} cities are allowed in total"
+  {
+    pattern: /^at most (\d+) cities are allowed in total$/,
+    translate: (m) => `도시는 총 ${m[1]}곳까지만 선택할 수 있습니다.`,
+  },
+  // f"at most {AI_SUGGESTION_MAX_COUNTRIES} countries are allowed"
+  {
+    pattern: /^at most (\d+) countries are allowed$/,
+    translate: (m) => `국가는 최대 ${m[1]}개까지만 선택할 수 있습니다.`,
+  },
+  // f"plan_count must be between {min} and {AI_SUGGESTION_MAX_PLANS}"
+  {
+    pattern: /^plan_count must be between (\d+) and (\d+)$/,
+    translate: (m) => `추천 안 개수는 ${m[1]}~${m[2]}개 사이여야 합니다.`,
+  },
+  // f"extra_notes must be at most {max} characters"
+  {
+    pattern: /^extra_notes must be at most (\d+) characters$/,
+    translate: (m) => `추가 요청 내용은 최대 ${m[1]}자까지 입력할 수 있습니다.`,
   },
 ]
 

@@ -6,9 +6,11 @@ import { API_BASE_URL } from '../api/client'
 import { extractErrorMessage } from '../lib/errors'
 import AppSettingsModal from '../components/AppSettingsModal'
 import OutOfRangeDaysModal from '../components/OutOfRangeDaysModal'
+import AiSuggestionModal from '../components/AiSuggestionModal'
 import TripChecklist from '../components/TripChecklist'
 import TripSettlement from '../components/TripSettlement'
 import TravelIllustration from '../components/TravelIllustration'
+import type { TripSuggestionResult } from '../api/aiSuggestion'
 import type { OutOfRangeDay, Trip } from '../types/models'
 
 export default function TripListPage() {
@@ -16,6 +18,8 @@ export default function TripListPage() {
   const { data: trips, isLoading } = useQuery({ queryKey: ['trips'], queryFn: listTrips })
 
   const [showSettings, setShowSettings] = useState(false)
+  const [showAiSuggestion, setShowAiSuggestion] = useState(false)
+  const [aiResultMessage, setAiResultMessage] = useState<{ text: string; warnings: string[] } | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [name, setName] = useState('')
   const [destination, setDestination] = useState('')
@@ -82,6 +86,16 @@ export default function TripListPage() {
     setEditingTripId(tripId)
   }
 
+  function handleAiSuggestionSuccess(result: TripSuggestionResult) {
+    setShowAiSuggestion(false)
+    const createdCount = result.created_trips.length
+    const parts = [`여행 ${createdCount}건이 추가되었습니다.`]
+    if (result.failed_plan_count > 0) {
+      parts.push(`${result.requested_plan_count}개 중 ${createdCount}개만 만들어졌습니다.`)
+    }
+    setAiResultMessage({ text: parts.join(' '), warnings: result.warnings })
+  }
+
   return (
     <div className="mx-auto min-h-screen max-w-2xl p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -97,6 +111,34 @@ export default function TripListPage() {
         </button>
       </div>
       {showSettings && <AppSettingsModal onClose={() => setShowSettings(false)} />}
+      {showAiSuggestion && (
+        <AiSuggestionModal
+          onClose={() => setShowAiSuggestion(false)}
+          onSuccess={handleAiSuggestionSuccess}
+        />
+      )}
+
+      {aiResultMessage && (
+        <div className="mb-6 rounded-lg bg-emerald-50 p-4 text-sm shadow">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-emerald-700">{aiResultMessage.text}</p>
+            <button
+              onClick={() => setAiResultMessage(null)}
+              aria-label="닫기"
+              className="shrink-0 text-emerald-400 hover:text-emerald-600"
+            >
+              ✕
+            </button>
+          </div>
+          {aiResultMessage.warnings.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-xs text-slate-500">
+              {aiResultMessage.warnings.map((warning, idx) => (
+                <li key={idx}>{warning}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 rounded-lg bg-white p-4 shadow">
         {!showCreateForm ? (
@@ -253,6 +295,21 @@ export default function TripListPage() {
           <p className="text-slate-400">등록된 여행이 없습니다. 위에서 새로 추가해보세요.</p>
         )}
       </ul>
+
+      {/* 우하단 고정 플로팅 버튼(ADR-0009 ui-dev 후속 스펙). 이 페이지에서 뜰 수 있는 모달 중
+          가장 낮은 게 `OutOfRangeDaysModal`(z-20)이므로, 버튼은 그보다 낮은 z-10으로 둬서
+          어떤 모달이 열려도 오버레이 아래로 자연히 가려진다(QA 회귀 수정 — 이전에는 버튼도
+          z-20이라 `OutOfRangeDaysModal`과 같은 스태킹 레벨이 되어, JSX 후순위 렌더링 탓에
+          모달 배경 위로 노출·클릭되는 문제가 있었다). `AppSettingsModal`(z-30),
+          `AiSuggestionModal`(z-40)도 당연히 버튼보다 높다. `DayEditorPage`의 모바일 에러 배너
+          (`fixed inset-x-4 bottom-4`, z-40)는 다른 라우트라 동시에 렌더되지 않는다. */}
+      <button
+        type="button"
+        onClick={() => setShowAiSuggestion(true)}
+        className="fixed bottom-6 right-6 z-10 flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-medium text-white shadow-lg hover:bg-indigo-500"
+      >
+        ✨ AI 추천
+      </button>
     </div>
   )
 }

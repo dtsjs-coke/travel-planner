@@ -1,5 +1,6 @@
 import datetime as dt
 import math
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -433,6 +434,167 @@ class AppSettingsUpdate(BaseModel):
                 )
             normalized[key] = stripped
         return normalized
+
+
+# --- AI 여행 추천 ---------------------------------------------------------------
+# 요청은 **자유 프롬프트가 아니라 고정된 조건 집합**이다. 사용자가 프롬프트를 쓰지 않으므로
+# 프롬프트 인젝션 표면이 `extra_notes` 한 필드로 줄어든다(그 한 필드도 길이/제어문자를
+# 여기서 막는다). 프롬프트 조립은 서버(`services/ai_trip_suggestion.py`)가 한다. — ADR-0009
+
+# AI 추천 전용 기간 상한. 기존 `MAX_TRIP_DAYS`(90)보다 훨씬 낮다 — 하루가 늘어날 때마다
+# LLM 출력 토큰과 Places 검증 호출이 **안(plan) 개수만큼 곱해져서** 늘기 때문이다
+# (14일 × 최대 6곳 × 3안 = 최대 252회 조회). 90일을 그대로 허용하면 한 번의 클릭이
+# 1,600회 넘는 유료 API 호출이 된다.
+AI_SUGGESTION_MAX_DAYS = 14
+# 한 요청에 넣을 수 있는 도시 총개수. 많아질수록 프롬프트가 커지고 도시별 앵커 조회가 늘며,
+# 무엇보다 "3일에 도시 6곳"처럼 일정 자체가 비현실적이 된다.
+AI_SUGGESTION_MAX_CITIES = 3
+AI_SUGGESTION_MAX_COUNTRIES = 2
+AI_SUGGESTION_MAX_PLANS = 3
+AI_SUGGESTION_MAX_EXTRA_NOTES_LENGTH = 200
+AI_SUGGESTION_MAX_NAME_LENGTH = 50
+
+SuggestionPace = Literal["relaxed", "normal", "packed"]
+SuggestionTheme = Literal["food", "heritage", "landmark", "cafe"]
+SuggestionAreaScope = Literal["selected_only", "include_nearby"]
+
+
+def _clean_place_name(value: str, *, field_label: str) -> str:
+    """국가/도시 이름을 정규화한다. 이 값들은 프롬프트와 Places 질의에 그대로 들어간다."""
+    stripped = " ".join(value.split())  # 줄바꿈/중복 공백 제거 (프롬프트 구조 보호)
+    if not stripped:
+        raise ValueError(f"{field_label} must not be empty")
+    if len(stripped) > AI_SUGGESTION_MAX_NAME_LENGTH:
+        raise ValueError(
+            f"{field_label} must be at most {AI_SUGGESTION_MAX_NAME_LENGTH} characters"
+        )
+    return stripped
+
+
+class SuggestionRegion(BaseModel):
+    """"어느 나라의 어느 도시들" 한 묶음. 여러 나라 여행은 이 묶음을 2개 보낸다.
+
+    별도 `multi_country: bool` 플래그를 두지 않는다 — 플래그와 실제 데이터가 어긋날 수 있고
+    (`multi_country=true`인데 나라가 하나), 서버가 필요한 정보는 `len(regions)`로 이미 안다.
+    화면의 "여러 나라" 토글은 이 배열에 두 번째 입력 블록을 추가할지만 결정하면 된다.
+    """
+
+    country: str
+    cities: list[str]
+
+    @field_validator("country")
+    @classmethod
+    def _validate_country(cls, value: str) -> str:
+        return _clean_place_name(value, field_label="country")
+
+    @field_validator("cities")
+    @classmethod
+    def _validate_cities(cls, value: list[str]) -> list[str]:
+        cleaned = [_clean_place_name(city, field_label="city") for city in value]
+        if not cleaned:
+            raise ValueError("cities must not be empty")
+        deduped = list(dict.fromkeys(cleaned))  # 입력 순서 유지 — 첫 도시가 제목의 대표 도시다
+        return deduped
+
+
+class TripSuggestionRequest(BaseModel):
+    regions: list[SuggestionRegion]
+    start_date: dt.date
+    end_date: dt.date
+    # "선택한 도시만" vs "주변 도시까지 포함" — 서버가 Places 검증 시 허용 반경으로,
+    # 프롬프트에서는 추천 범위 문구로 번역한다.
+    area_scope: SuggestionAreaScope = "selected_only"
+    pace: SuggestionPace = "normal"
+    # 다중 선택. 빈 배열이면 "특별한 테마 없음"으로 프롬프트에 반영한다(에러가 아니다).
+    themes: list[SuggestionTheme] = Field(default_factory=list)
+    extra_notes: str | None = None
+    plan_count: int = AI_SUGGESTION_MAX_PLANS
+
+    @field_validator("regions")
+    @classmethod
+    def _validate_regions(cls, value: list[SuggestionRegion]) -> list[SuggestionRegion]:
+        if not value:
+            raise ValueError("regions must not be empty")
+        if len(value) > AI_SUGGESTION_MAX_COUNTRIES:
+            raise ValueError(f"at most {AI_SUGGESTION_MAX_COUNTRIES} countries are allowed")
+        total_cities = sum(len(region.cities) for region in value)
+        if total_cities > AI_SUGGESTION_MAX_CITIES:
+            raise ValueError(f"at most {AI_SUGGESTION_MAX_CITIES} cities are allowed in total")
+        return value
+
+    @field_validator("themes")
+    @classmethod
+    def _validate_themes(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
+    @field_validator("extra_notes")
+    @classmethod
+    def _validate_extra_notes(cls, value: str | None) -> str | None:
+        """짧은 자유 텍스트. **프롬프트에 그대로 들어가는 유일한 자유 입력**이라 여기서 막는다.
+
+        제어문자를 지우는 이유는 프롬프트 구조 보호다 — 개행을 허용하면 조립된 프롬프트의
+        섹션 경계를 흉내 내는 입력을 만들기 쉬워진다. 길이 상한은 비용(입력 토큰)과
+        인젝션 표면을 동시에 줄인다. 내용 자체의 악용은 이 필터가 아니라 **출력 스키마 강제 +
+        전 장소 Places 검증**이 막는다(ADR-0009).
+        """
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            return None
+        if len(cleaned) > AI_SUGGESTION_MAX_EXTRA_NOTES_LENGTH:
+            raise ValueError(
+                f"extra_notes must be at most {AI_SUGGESTION_MAX_EXTRA_NOTES_LENGTH} characters"
+            )
+        return cleaned
+
+    @field_validator("plan_count")
+    @classmethod
+    def _validate_plan_count(cls, value: int) -> int:
+        if not 1 <= value <= AI_SUGGESTION_MAX_PLANS:
+            raise ValueError(f"plan_count must be between 1 and {AI_SUGGESTION_MAX_PLANS}")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_date_range(self):
+        # 기존 여행 생성과 같은 순수 함수로 역전/상한을 먼저 본다(= Day 자동 생성에 안전한 범위).
+        # 날짜가 필수(Optional 아님)라 여기서는 항상 실제 검증이 일어난다.
+        validate_date_range(self.start_date, self.end_date)
+        # 그 위에 AI 전용(더 낮은) 상한을 겹친다.
+        span = (self.end_date - self.start_date).days + 1
+        if span > AI_SUGGESTION_MAX_DAYS:
+            raise ValueError(
+                f"ai suggestion cannot span more than {AI_SUGGESTION_MAX_DAYS} days"
+            )
+        return self
+
+
+class SuggestedTripRead(BaseModel):
+    """생성된 여행 하나의 요약. 프론트는 이 목록을 받고 기존 여행 목록을 invalidate하면 된다
+    (전체 `TripRead`를 돌려주지 않는 이유는 ADR-0009 참고 — 목록 화면이 이미 그 데이터를
+    스스로 다시 받아오기 때문)."""
+
+    id: int
+    name: str
+    start_date: dt.date
+    end_date: dt.date
+    day_count: int
+    item_count: int
+
+
+class TripSuggestionResult(BaseModel):
+    """`POST /api/ai/trip-suggestions` 응답.
+
+    `created_trips`가 비어 있는 응답은 없다 — 하나도 만들지 못하면 502다.
+    `failed_plan_count`/`dropped_place_count`/`warnings`는 **부분 성공을 숨기지 않기 위한**
+    보고 필드다(정산의 `unassigned_*`와 같은 성격).
+    """
+
+    created_trips: list[SuggestedTripRead]
+    requested_plan_count: int
+    failed_plan_count: int
+    dropped_place_count: int
+    warnings: list[str] = Field(default_factory=list)
 
 
 # --- 정산(더치페이) 응답 -------------------------------------------------------
