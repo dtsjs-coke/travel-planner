@@ -19,6 +19,11 @@ LLM이 제안한 순서는 쓰지 않는다. LLM은 "무엇을 갈지"를 고르
 중간 날의 `departure`는 "오늘 이 도시를 떠난다"는 뜻이라 `PIN_FIRST`다(ADR-0010).
 그래서 이 모듈은 pin만 보고, `PIN_FIRST`가 여러 개면 **입력 순서의 마지막**을 앵커로 삼는다
 (도시 이동일의 "출발 거점 → 도착 거점"에서 그날 동선의 기준점은 도착 거점이다).
+
+**정렬 스타일(ADR-0012)**: 사용자가 이미 등록해둔 일정을 재정렬하는 기능(`services/itinerary_sort.py`)은
+"가까운곳 먼저 / 먼곳 먼저 / 적당하게" 세 가지를 고를 수 있다. 세 스타일은 **첫 방문지를 어디로
+잡을지만 다르고**, 그 다음부터는 셋 다 최근접 이웃이다(근거는 ADR-0012). 기본값
+`STYLE_NEAREST`는 이 모듈이 원래 하던 것과 완전히 같은 계산이라 AI 추천 경로는 영향을 받지 않는다.
 """
 
 from __future__ import annotations
@@ -30,6 +35,12 @@ from typing import Protocol, Sequence, TypeVar
 # 몰라야 하고(호출자가 kind → pin으로 번역한다), 그래야 순수 함수로 남는다.
 PIN_FIRST = "first"
 PIN_LAST = "last"
+
+# 정렬 스타일. 값이 그대로 API 바디(`style`)와 프론트 선택지에 쓰인다.
+STYLE_NEAREST = "nearest"  # 가까운곳 먼저 — 앵커에서 가장 가까운 곳부터 (기존 동작)
+STYLE_FARTHEST = "farthest"  # 먼곳 먼저 — 가장 먼 곳을 먼저 찍고 앵커 쪽으로 쓸어 돌아온다
+STYLE_BALANCED = "balanced"  # 적당하게 — 거리 순의 가운데를 먼저 찍는다 (두 극단의 중간)
+ORDER_STYLES: tuple[str, ...] = (STYLE_NEAREST, STYLE_FARTHEST, STYLE_BALANCED)
 
 EARTH_RADIUS_KM = 6371.0088
 
@@ -67,16 +78,51 @@ def _coords(item: Positioned) -> tuple[float, float] | None:
     return (item.lat, item.lng)
 
 
+def _distance_from(anchor: tuple[float, float]):
+    def key(place: Positioned) -> float:
+        return haversine_km(anchor, _coords(place))  # type: ignore[arg-type]
+
+    return key
+
+
+def _select_first(
+    candidates: Sequence[P], anchor: tuple[float, float], style: str
+) -> P:
+    """그날의 **첫 방문지**를 스타일에 따라 고른다. 여기가 세 스타일이 갈리는 유일한 지점이다.
+
+    - `STYLE_NEAREST`: 앵커에서 가장 가까운 곳. (그 다음도 최근접 이웃이므로 결과적으로
+      이 모듈이 원래 하던 순수 최근접 이웃과 **완전히 같다** — AI 추천 경로 무회귀.)
+    - `STYLE_FARTHEST`: 앵커에서 가장 먼 곳. 매 단계마다 "가장 먼 곳"을 고르는 방식이
+      아니다 — 그건 지그재그 동선이 되어 여행 계획으로 못 쓴다(ADR-0012 기각 대안).
+      가장 먼 곳을 먼저 찍고 나머지를 최근접 이웃으로 이으면 자연스럽게 앵커 쪽으로
+      쓸어 돌아오는 동선이 된다.
+    - `STYLE_BALANCED`: 앵커에서의 거리 순으로 줄 세운 뒤 **하위 중앙값**을 고른다.
+      후보가 2개 이하면 `(n-1)//2 == 0`이라 가까운 쪽과 같아진다(3곳 이상부터 갈린다).
+
+    동점은 전부 **입력 순서**로 깨진다(`min`/`max`/`sorted` 모두 안정적) — 같은 입력에
+    같은 출력을 보장해야 재시도/동시 요청이 순서를 흔들지 않는다.
+    """
+    key = _distance_from(anchor)
+    if style == STYLE_FARTHEST:
+        return max(candidates, key=key)
+    if style == STYLE_BALANCED:
+        ranked = sorted(candidates, key=key)
+        return ranked[(len(ranked) - 1) // 2]
+    return min(candidates, key=key)
+
+
 def order_day_places(
-    places: Sequence[P], *, start: tuple[float, float] | None = None
+    places: Sequence[P], *, start: tuple[float, float] | None = None,
+    style: str = STYLE_NEAREST,
 ) -> list[P]:
     """하루치 방문지를 방문 순서대로 재배열한다 (입력 객체를 수정하지 않는다).
 
     규칙:
     1. `pin == PIN_FIRST`인 항목은 주어진 순서 그대로 맨 앞.
     2. `pin == PIN_LAST`인 항목은 주어진 순서 그대로 맨 뒤.
-    3. 나머지는 앵커에서 시작하는 최근접 이웃 순서. 앵커는 (a) 마지막 PIN_FIRST 항목의 좌표,
-       (b) 없으면 인자로 받은 `start`, (c) 둘 다 없으면 앵커 없이 **입력 순서 유지**.
+    3. 나머지는 앵커에서 시작해, **첫 방문지만 `style`이 정하고** 그 뒤로는 최근접 이웃.
+       앵커는 (a) 마지막 PIN_FIRST 항목의 좌표, (b) 없으면 인자로 받은 `start`,
+       (c) 둘 다 없으면 앵커 없이 **입력 순서 유지**(이때는 style도 의미가 없다).
     4. 좌표가 없는 항목(lat/lng None)은 거리를 계산할 수 없으므로 재정렬 대상에서 빼고
        중간 그룹의 맨 뒤에 입력 순서로 붙인다. 순서를 지어내지 않는다.
     """
@@ -104,10 +150,14 @@ def order_day_places(
         ordered_middles = []
         cursor = anchor
         while remaining:
-            nearest = min(remaining, key=lambda p: haversine_km(cursor, _coords(p)))  # type: ignore[arg-type]
-            remaining.remove(nearest)
-            ordered_middles.append(nearest)
-            cursor = _coords(nearest)  # type: ignore[assignment]
+            if not ordered_middles:
+                # 첫 방문지만 스타일이 정한다. 이후로는 셋 다 최근접 이웃이다(ADR-0012).
+                picked = _select_first(remaining, anchor, style)
+            else:
+                picked = min(remaining, key=lambda p: haversine_km(cursor, _coords(p)))  # type: ignore[arg-type]
+            remaining.remove(picked)
+            ordered_middles.append(picked)
+            cursor = _coords(picked)  # type: ignore[assignment]
 
     return [*firsts, *ordered_middles, *unlocatable, *lasts]
 

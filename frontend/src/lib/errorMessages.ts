@@ -74,6 +74,23 @@ const EXACT_MESSAGES: Record<string, string> = {
   'GEMINI_API_KEY is not configured':
     'AI 추천 기능이 아직 설정되지 않았습니다(관리자 확인 필요).',
   'AI suggestion failed for all plans': 'AI 추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.',
+
+  // --- 일정 AI 정렬 (app/routers/itinerary_sort.py, app/schemas.py, ADR-0012) ---
+  'itinerary sort is disabled in app settings':
+    '마스터 환경설정에서 일정 AI 정렬 기능이 꺼져 있습니다.',
+  'route endpoint items must belong to this day':
+    '선택한 일정이 이 날짜의 일정이 아닙니다. 새로고침 후 다시 시도해주세요.',
+  'start and end points must be different items': '시작점과 끝점은 서로 다른 일정으로 지정해주세요.',
+  // 이 문구는 일반 에러가 아니라 "확인 알림"으로 보여줘야 한다 — `ItinerarySortModal`이
+  // `FIRST_DAY_ENDPOINTS_REQUIRED_DETAIL`로 원문을 직접 비교해 먼저 가로채고, 이 매핑은
+  // 혹시 다른 경로(예: 일반 에러 배너)로 표시될 때를 위한 안전망이다.
+  'the first day of this trip must have its start and end points designated':
+    '첫째 날의 시작점과 끝점을 먼저 지정해주세요.',
+  'all day_ids must belong to this trip':
+    '선택한 날짜 중 이 여행에 속하지 않는 날짜가 있습니다. 새로고침 후 다시 시도해주세요.',
+  'day_ids must not be empty': '정렬할 날짜를 선택해주세요.',
+  'style must be one of: nearest, farthest, balanced':
+    '정렬 방식 값이 올바르지 않습니다. 새로고침 후 다시 시도해주세요.',
 }
 
 /** 상한값 등 동적 값이 메시지 안에 섞여 있어 정규식으로 값만 뽑아 문장에 끼워 넣는 경우. */

@@ -27,6 +27,12 @@ class AppSettings(SQLModel, table=True):
     # `load_participants()`가 이 모델을 그대로 인스턴스화해서 기본값을 얻는다(중복 정의 방지).
     participant_1_name: str = "희경"
     participant_2_name: str = "재승"
+    # "일정 AI 정렬"(ADR-0012) 온/오프. 외부 API를 전혀 쓰지 않는 순수 계산 기능이라 비용은
+    # 없지만, 사용자가 화면에서 끌 수 있어야 한다는 요구가 있었다. 꺼져 있으면 프론트가
+    # 버튼을 숨기는 것과 **별개로 서버가 403으로 막는다**(UI 숨김은 API 차단이 아니다).
+    # 기본값 True: 이 토글은 "새로 켜는 스위치"가 아니라 **끄는 스위치**다(기능이 무료라
+    # 기본으로 꺼두면 새 환경에서 기능이 고장난 것처럼 보인다).
+    route_sort_enabled: bool = True
     updated_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
 
 
@@ -112,6 +118,17 @@ class ItineraryItem(SQLModel, table=True):
     # 여기에 컬럼을 더하기 전에 그 섹션을 먼저 읽을 것.
     place_category: str | None = None  # 사람이 읽는 분류 라벨 ("문화센터", "한식당")
     region_name: str | None = None  # "광주광역시 동구"
+
+    # --- 일정 AI 정렬의 시작점/끝점 지정 (ADR-0012) --------------------------------
+    # `"start"` = 이 Day 동선의 시작점, `"end"` = 끝점, NULL = 역할 없음(대부분).
+    # **한 Day에 각 역할은 최대 하나**이며, 이는 `PUT /api/days/{id}/route-endpoints`가
+    # 같은 트랜잭션에서 다른 항목의 같은 역할을 지우는 방식으로 보장한다(DB 제약이 아니다 —
+    # 부분 유니크 인덱스는 SQLite/Postgres 문법이 갈리고, 이 값이 깨져도 정렬이 "시작점이
+    # 여럿"으로 퇴화할 뿐 데이터가 손상되지 않는다).
+    # `category`(AI가 넣는 동선 역할 코드)와 겹쳐 쓰지 않는 이유는 ADR-0012 참고 —
+    # 그쪽은 **생성 시점**에 AI가 부여하는 값이고, 이건 **사후에 사용자가** 부여하는 값이다.
+    # 다른 Day로 옮기면(`POST /api/items/{id}/move`) 이 값은 지워진다(역할은 Day에 매인다).
+    route_role: str | None = None
 
     cost_amount: float | None = None
     cost_currency: str | None = None

@@ -125,6 +125,9 @@ def move_item(item_id: int, body: MoveItemRequest, db: Session = Depends(get_db)
 
     item.day_id = target_day.id
     item.position = target_position
+    # 시작점/끝점 지정은 **그 Day의 동선 역할**이라 항목을 따라 옮겨가지 않는다(ADR-0012).
+    # 그대로 두면 목적지 Day에 시작점이 두 개가 되거나, 원래 Day가 시작점을 조용히 잃는다.
+    item.route_role = None
     item.updated_at = dt.datetime.utcnow()
     db.add(item)
 

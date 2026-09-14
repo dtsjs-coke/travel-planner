@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getSettings, updateSettings } from '../api/settings'
+import { getSettings, updateSettings, type SettingsUpdateInput } from '../api/settings'
 import { extractErrorMessage } from '../lib/errors'
 import type { AppSettings } from '../types/models'
 
@@ -46,13 +46,15 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
   const queryClient = useQueryClient()
   const [name1, setName1] = useState(settings.participants[0]?.name ?? '')
   const [name2, setName2] = useState(settings.participants[1]?.name ?? '')
+  const [routeSortEnabled, setRouteSortEnabled] = useState(settings.route_sort_enabled)
   const [error, setError] = useState<string | null>(null)
 
   const updateMutation = useMutation({
-    mutationFn: (patch: Record<string, string>) => updateSettings(patch),
+    mutationFn: (input: SettingsUpdateInput) => updateSettings(input),
     onSuccess: () => {
-      // 이것 하나만 무효화하면 결제자 선택박스/일정 카드/정산 화면이 전부 새 이름으로 갱신된다
-      // — 일정 응답에는 키만 있고 이름이 없어서 `['days', dayId, 'items']`는 건드릴 필요가 없다(ADR-0007).
+      // 이것 하나만 무효화하면 결제자 선택박스/일정 카드/정산 화면·Day 편집의 "AI 정렬" 진입점이
+      // 전부 새 값으로 갱신된다 — 일정 응답에는 키만 있고 이름이 없어서 `['days', dayId, 'items']`는
+      // 건드릴 필요가 없다(ADR-0007).
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       setError(null)
       onClose()
@@ -80,12 +82,16 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
     if (p1 && trimmed1 !== p1.name) patch[p1.key] = trimmed1
     if (p2 && trimmed2 !== p2.name) patch[p2.key] = trimmed2
 
-    if (Object.keys(patch).length === 0) {
+    const input: SettingsUpdateInput = {}
+    if (Object.keys(patch).length > 0) input.participants = patch
+    if (routeSortEnabled !== settings.route_sort_enabled) input.route_sort_enabled = routeSortEnabled
+
+    if (Object.keys(input).length === 0) {
       onClose()
       return
     }
     setError(null)
-    updateMutation.mutate(patch)
+    updateMutation.mutate(input)
   }
 
   return (
@@ -112,6 +118,22 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
 
       {!bothFilled && <p className="text-xs text-amber-600">이름은 비워둘 수 없습니다.</p>}
       {isDuplicate && <p className="text-xs text-amber-600">두 이름은 서로 달라야 합니다.</p>}
+
+      <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600">
+        <span>
+          일정 AI 정렬 기능
+          <span className="block text-xs text-slate-400">
+            Day 편집 화면에서 등록된 일정을 동선 순서로 자동 정렬합니다(외부 API 비용 없음).
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={routeSortEnabled}
+          onChange={(e) => setRouteSortEnabled(e.target.checked)}
+          className="h-5 w-5 shrink-0 rounded border-slate-300"
+        />
+      </label>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex justify-end gap-2">

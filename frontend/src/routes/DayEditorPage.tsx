@@ -6,11 +6,15 @@ import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
 import { deleteItem, moveItem, reorderItems, updateItem, type ItemUpdateInput } from '../api/items'
 import { getSettings } from '../api/settings'
+import { setRouteEndpoints, type SortItineraryResult } from '../api/itinerarySort'
 import { extractErrorMessage } from '../lib/errors'
+import { computeNextRouteEndpoints, type RouteRole } from '../lib/routeEndpoints'
 import AddItemModal from '../components/AddItemModal'
 import CalendarIllustration from '../components/CalendarIllustration'
 import DayEditorDesktop from '../components/DayEditorDesktop'
 import DayEditorMobile from '../components/DayEditorMobile'
+import ItinerarySortModal from '../components/ItinerarySortModal'
+import ItinerarySortResultBanner from '../components/ItinerarySortResultBanner'
 import { useIsDesktop } from '../hooks/useIsDesktop'
 import { useTripItems } from '../hooks/useTripItems'
 import type { ItineraryItem } from '../types/models'
@@ -31,11 +35,18 @@ export default function DayEditorPage() {
 
   const days = trip?.days ?? []
   const { itemsByDayId, isLoading: itemsLoading, errorDayIds: itemsErrorDayIds } = useTripItems(days)
+  // 여행에서 날짜순으로 가장 이른 Day(ADR-0012의 "첫날"). `days`는 이미 날짜순으로 온다(다른
+  // 화면도 index 0을 "Day1"로 취급한다 — `getDayLabel`).
+  const firstDayId = days[0]?.id ?? null
 
-  // 결제자 선택박스/표시에 쓰는 참가자 목록. 이름이 바뀌면 `['settings']`만 무효화해도
-  // 여기서 자동으로 새 이름을 받아온다(ADR-0007) — 일정 캐시를 따로 건드릴 필요가 없다.
+  // 결제자 선택박스/표시에 쓰는 참가자 목록 + 일정 AI 정렬 토글. 값이 바뀌면 `['settings']`만
+  // 무효화해도 여기서 자동으로 새 값을 받아온다(ADR-0007) — 일정 캐시를 따로 건드릴 필요가 없다.
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings })
   const participants = settings?.participants ?? []
+  // 로딩 중(settings === undefined)에는 서버 기본값(true)과 같게 취급한다 — 껐다가 다시 켜는
+  // 스위치가 아니라 기본은 켜져 있는 기능이라, 로딩 중 버튼이 깜빡이며 숨었다 나타나는 것보다
+  // 낫다(ADR-0012 결정 7).
+  const routeSortEnabled = settings?.route_sort_enabled !== false
 
   const [showCreateDayForm, setShowCreateDayForm] = useState(false)
   const [newDayDate, setNewDayDate] = useState('')
@@ -125,6 +136,44 @@ export default function DayEditorPage() {
     },
   })
 
+  // 일정 AI 정렬(ADR-0012) — 시작점/끝점 지정.
+  const [routeRoleError, setRouteRoleError] = useState<string | null>(null)
+  const setRouteEndpointsMutation = useMutation({
+    mutationFn: ({
+      dayId,
+      body,
+    }: {
+      dayId: number
+      body: { start_item_id: number | null; end_item_id: number | null }
+    }) => setRouteEndpoints(dayId, body),
+    onSuccess: (_items, { dayId }) => {
+      setRouteRoleError(null)
+      queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] })
+    },
+    onError: (err) => {
+      setRouteRoleError(extractErrorMessage(err, '시작점/끝점을 지정하지 못했습니다.'))
+    },
+  })
+
+  function handleSetRouteRole(dayId: number, itemId: number, role: RouteRole) {
+    const body = computeNextRouteEndpoints(itemsByDayId[dayId] ?? [], itemId, role)
+    setRouteEndpointsMutation.mutate({ dayId, body })
+  }
+
+  // 일정 AI 정렬 — 날짜 선택/실행 모달 + 결과 배너.
+  const [showSortModal, setShowSortModal] = useState(false)
+  const [sortResult, setSortResult] = useState<SortItineraryResult | null>(null)
+
+  function handleSortSuccess(result: SortItineraryResult) {
+    setShowSortModal(false)
+    setSortResult(result)
+    // 응답에는 항목 배열이 들어있지 않다(의도적, ADR-0012) — 성공한 날짜의 캐시만 무효화해
+    // 새 순서를 다시 받아온다.
+    result.sorted_days.forEach((day) => {
+      queryClient.invalidateQueries({ queryKey: ['days', day.day_id, 'items'] })
+    })
+  }
+
   if (tripLoading) return <p className="p-6 text-slate-500">불러오는 중...</p>
   if (!trip) return <p className="p-6 text-red-600">여행을 찾을 수 없습니다.</p>
 
@@ -150,6 +199,8 @@ export default function DayEditorPage() {
         { dayId, itemId, targetDayId },
         { onSuccess: () => onMoved?.(targetDayId) },
       ),
+    firstDayId,
+    onSetRouteRole: handleSetRouteRole,
   }
 
   return (
@@ -158,7 +209,37 @@ export default function DayEditorPage() {
       <Link to="/trips" className="text-sm text-slate-500 hover:underline">
         &larr; 여행 목록
       </Link>
-      <h1 className="mb-4 mt-2 text-2xl font-semibold text-slate-800">{trip.name}</h1>
+      <div className="mb-4 mt-2 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-slate-800">{trip.name}</h1>
+        {/* 여행 목록의 "✨ AI 추천"(새 여행 생성, ADR-0009)과 다른 기능이라 라벨/색상을 분명히
+            구분한다. 기능 토글이 꺼져 있으면(마스터 환경설정) 서버도 403으로 막지만, 여기서
+            먼저 숨겨 불필요한 요청/혼란을 막는다(ADR-0012 결정 7). */}
+        {routeSortEnabled && days.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowSortModal(true)}
+            className="shrink-0 rounded-md bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-500"
+          >
+            🧭 AI 정렬
+          </button>
+        )}
+      </div>
+
+      {routeRoleError && (
+        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{routeRoleError}</p>
+      )}
+
+      {sortResult && <ItinerarySortResultBanner result={sortResult} onDismiss={() => setSortResult(null)} />}
+
+      {showSortModal && (
+        <ItinerarySortModal
+          tripId={tripIdNum}
+          days={days}
+          itemsByDayId={itemsByDayId}
+          onClose={() => setShowSortModal(false)}
+          onSuccess={handleSortSuccess}
+        />
+      )}
 
       <div className="mb-6 rounded-lg bg-white p-4 shadow">
         {!showCreateDayForm ? (

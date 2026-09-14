@@ -3,7 +3,9 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Day, ItineraryItem, Participant } from '../types/models'
 import type { ItineraryItemPatch } from '../types/dayEditor'
+import type { RouteRole } from '../lib/routeEndpoints'
 import MoveItemControl from './MoveItemControl'
+import RouteRoleControl from './RouteRoleControl'
 import ItineraryItemDetailModal from './ItineraryItemDetailModal'
 import { getGoogleMapsLink } from '../lib/googleMapsLink'
 
@@ -14,10 +16,14 @@ interface Props {
   moveVariant: 'dropdown' | 'sheet'
   /** 결제자 선택박스/표시용 참가자 목록(`GET /api/settings`). */
   participants: Participant[]
+  /** 시작/끝점 지정 메뉴를 보여줄지(첫날에서만 true, ADR-0012). `route_role` 배지 자체는
+   * 이 값과 무관하게 항상 표시한다. */
+  canDesignateRouteRole?: boolean
   onDelete: (itemId: number) => void
   onUpdateTitle: (itemId: number, title: string) => void
   onUpdateItem: (itemId: number, patch: ItineraryItemPatch, onError?: (message: string) => void) => void
   onMove: (itemId: number, targetDayId: number) => void
+  onSetRouteRole: (itemId: number, role: RouteRole) => void
 }
 
 export default function ItineraryItemCard({
@@ -26,10 +32,12 @@ export default function ItineraryItemCard({
   days,
   moveVariant,
   participants,
+  canDesignateRouteRole = false,
   onDelete,
   onUpdateTitle,
   onUpdateItem,
   onMove,
+  onSetRouteRole,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -151,6 +159,22 @@ export default function ItineraryItemCard({
             >
               {item.title}
             </button>
+            {item.route_role === 'start' && (
+              <span
+                className="shrink-0 rounded-md bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700"
+                title="일정 AI 정렬의 시작점으로 지정됨"
+              >
+                시작
+              </span>
+            )}
+            {item.route_role === 'end' && (
+              <span
+                className="shrink-0 rounded-md bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-700"
+                title="일정 AI 정렬의 끝점으로 지정됨"
+              >
+                끝
+              </span>
+            )}
             {startTimeLabel && (
               <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
                 {startTimeLabel}
@@ -181,6 +205,9 @@ export default function ItineraryItemCard({
         )}
       </div>
       <div className="ml-2 flex shrink-0 items-center gap-2">
+        {canDesignateRouteRole && (
+          <RouteRoleControl role={item.route_role} onSetRole={(role) => onSetRouteRole(item.id, role)} />
+        )}
         <MoveItemControl
           days={days}
           currentDayId={item.day_id}

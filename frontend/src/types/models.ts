@@ -72,6 +72,9 @@ export interface ItineraryItem {
   place_category: string | null
   /** 지역명("광주광역시 동구"). 사용자가 직접 고칠 수 있다(ADR-0011). */
   region_name: string | null
+  /** 일정 AI 정렬의 시작점/끝점 지정(ADR-0012). `PUT /api/days/{id}/route-endpoints`로만 바뀐다 —
+   * 이 값을 바꾸는 별도의 Create/Update 입력은 없다(카드에 배지 표시용으로만 쓴다). */
+  route_role: 'start' | 'end' | null
 }
 
 /** 마스터 환경설정의 참가자 한 명. `key`는 저장/전송에, `name`은 표시에 쓴다. */
@@ -82,6 +85,9 @@ export interface Participant {
 
 export interface AppSettings {
   participants: Participant[]
+  /** 일정 AI 정렬 기능 온/오프(ADR-0012). 꺼져 있으면 Day 편집 화면의 "AI 정렬" 진입점을
+   * 프론트가 먼저 숨기고, 서버도 같은 값으로 관련 API를 403으로 막는다. */
+  route_sort_enabled: boolean
 }
 
 export interface ParticipantTotal {

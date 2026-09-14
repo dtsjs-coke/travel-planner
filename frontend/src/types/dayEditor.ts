@@ -1,4 +1,5 @@
 import type { Day, ItineraryItem, Participant } from './models'
+import type { RouteRole } from '../lib/routeEndpoints'
 
 /** 일정 카드에서 바꿀 수 있는 비용/결제자 필드. `cost_amount`/`paid_by`의 명시적 `null`은
  * "지운다"/"미지정으로 되돌린다"는 뜻으로 서버가 200 처리한다(ADR-0006/0007). */
@@ -38,4 +39,11 @@ export interface DayEditorViewProps {
   /** 일정을 다른 Day로 옮긴다. `onMoved`는 이동 성공 후(캐시 무효화 이후) 호출되는 선택적
    * 콜백으로, 모바일 연속 스크롤에서 목적지 Day 섹션으로 스크롤하는 데 쓰인다(DayEditorMobile). */
   onMoveItem: (dayId: number, itemId: number, targetDayId: number, onMoved?: (targetDayId: number) => void) => void
+  /** 그 여행에서 날짜순으로 가장 이른 Day의 id(달력상 "첫날", ADR-0012). 일정 AI 정렬의
+   * 시작점/끝점 지정 UI는 이 Day에서만 노출한다(서버는 어느 Day든 허용하지만, 프론트는 첫날만
+   * 노출하기로 했다 — ui-dev 후속 스펙). `days`가 비어 있으면 null. */
+  firstDayId: number | null
+  /** 시작점/끝점 지정을 바꾼다(`PUT /api/days/{id}/route-endpoints`). `role`은 그 항목에
+   * 적용할 새 역할 — 이미 같은 역할이면 해제(`null`)로 토글하는 것은 호출부(카드)의 몫이다. */
+  onSetRouteRole: (dayId: number, itemId: number, role: RouteRole) => void
 }

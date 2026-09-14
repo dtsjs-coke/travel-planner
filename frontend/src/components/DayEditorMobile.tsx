@@ -54,6 +54,8 @@ export default function DayEditorMobile({
   onUpdateItem,
   onReorderItems,
   onMoveItem,
+  firstDayId,
+  onSetRouteRole,
 }: DayEditorViewProps) {
   const stickyRef = useRef<HTMLDivElement>(null)
   const [stickyHeight, setStickyHeight] = useState(DEFAULT_STICKY_HEIGHT)
@@ -185,10 +187,12 @@ export default function DayEditorMobile({
               moveVariant="sheet"
               participants={participants}
               hasError={itemsErrorDayIds.includes(day.id)}
+              isFirstDay={day.id === firstDayId}
               onDelete={(itemId) => onDeleteItem(day.id, itemId)}
               onUpdateTitle={(itemId, title) => onUpdateItemTitle(day.id, itemId, title)}
               onUpdateItem={(itemId, patch, onError) => onUpdateItem(day.id, itemId, patch, onError)}
               onMove={(itemId, targetDayId) => onMoveItem(day.id, itemId, targetDayId, jumpToDay)}
+              onSetRouteRole={(itemId, role) => onSetRouteRole(day.id, itemId, role)}
             />
           </section>
         ))

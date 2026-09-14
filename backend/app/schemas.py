@@ -4,8 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.services.route_order import ORDER_STYLES, STYLE_NEAREST
 from app.services.settlement import PARTICIPANT_KEYS
-from app.services.trip_days import validate_date_range
+from app.services.trip_days import MAX_TRIP_TOTAL_DAYS, validate_date_range
 
 # 참가자 표시 이름 길이 상한. 이 값은 정산 표/결제자 선택박스에 그대로 렌더링되므로
 # 상한이 없으면 한 사람이 레이아웃을 깨뜨릴 수 있다. 닉네임 용도라 넉넉히 20자.
@@ -368,6 +369,11 @@ class ItineraryItemRead(ORMModel):
     # 이후로는 사용자가 상세보기에서 직접 고친다.
     place_category: str | None
     region_name: str | None
+    # 일정 AI 정렬의 시작점/끝점 지정(ADR-0012). `"start"` / `"end"` / null.
+    # **Create/Update 스키마에는 일부러 없다** — 이 값은 "Day당 하나"라는 제약이 있어서
+    # 다른 항목의 역할을 함께 지워야 하고, 그건 단일 항목 PATCH가 할 수 있는 일이 아니다.
+    # 지정은 `PUT /api/days/{id}/route-endpoints` 한 곳에서만 한다.
+    route_role: str | None
 
 
 class ReorderItemsRequest(BaseModel):
@@ -382,6 +388,102 @@ class MoveItemRequest(BaseModel):
     """
 
     target_day_id: int
+
+
+# --- 일정 AI 정렬 (ADR-0012) ----------------------------------------------------
+# 한 요청에 담을 수 있는 날짜 수 상한은 "여행 하나가 가질 수 있는 Day 총개수"와 같다
+# (`MAX_TRIP_TOTAL_DAYS`). 어차피 그보다 많은 Day는 존재할 수 없으므로 이 상한은
+# "말도 안 되게 큰 배열"만 걸러내는 용도다 — 외부 호출이 없어 비용 상한은 필요 없다.
+
+
+class RouteEndpointsUpdate(BaseModel):
+    """`PUT /api/days/{day_id}/route-endpoints` 바디. 그 Day의 시작점/끝점 지정.
+
+    ```jsonc
+    {"start_item_id": 12, "end_item_id": 17}   // 지정
+    {"start_item_id": null, "end_item_id": null}  // 둘 다 해제
+    ```
+
+    PATCH가 아니라 **PUT**인 이유: 두 역할은 함께 의미를 갖고(시작만 있고 끝이 없는 첫날은
+    정렬이 실행되지 않는다), 매번 전체를 보내면 "필드 생략 vs 명시적 null"이라는 이
+    저장소의 단골 함정이 아예 생기지 않는다. 생략하면 `null`(= 해제)이다.
+    """
+
+    start_item_id: int | None = None
+    end_item_id: int | None = None
+
+
+class SortItineraryRequest(BaseModel):
+    """`POST /api/trips/{trip_id}/sort-itinerary` 바디.
+
+    `day_ids`는 **연속일 필요가 없다**(Day1과 Day3만 고를 수 있다). 연속성은 선택된 날짜가
+    아니라 달력상 전날을 기준으로 판단하므로, 선택되지 않은 Day2의 끝 장소가 Day3의
+    시작점이 된다(ADR-0012).
+    """
+
+    day_ids: list[int]
+    style: str = STYLE_NEAREST
+
+    @field_validator("day_ids")
+    @classmethod
+    def _validate_day_ids(cls, value: list[int]) -> list[int]:
+        deduped = list(dict.fromkeys(value))  # 중복은 무해하므로 거부하지 않고 정리만 한다
+        if not deduped:
+            raise ValueError("day_ids must not be empty")
+        if len(deduped) > MAX_TRIP_TOTAL_DAYS:
+            raise ValueError(f"at most {MAX_TRIP_TOTAL_DAYS} days can be sorted at once")
+        return deduped
+
+    @field_validator("style")
+    @classmethod
+    def _validate_style(cls, value: str) -> str:
+        # `Literal`로 선언하지 않은 이유: 허용값의 단일 소스는 계산을 실제로 수행하는
+        # `services/route_order.py`이고, 스키마가 그 목록을 복사해두면 둘이 어긋날 수 있다.
+        if value not in ORDER_STYLES:
+            allowed = ", ".join(ORDER_STYLES)
+            raise ValueError(f"style must be one of: {allowed}")
+        return value
+
+
+class SortedDayRead(ORMModel):
+    """정렬을 수행한 날짜. `changed=false`는 "이미 최적 순서였다"는 뜻이다(실패가 아니다)."""
+
+    day_id: int
+    date: dt.date
+    item_count: int
+    changed: bool
+    unlocatable_item_count: int
+
+
+class DaySortIssueRead(ORMModel):
+    """정렬하지 못한 날짜. `reason_code`는 안정적인 영문 식별자이고,
+    `message`는 **그대로 화면에 띄울 수 있는 한국어 안내문**이다.
+
+    에러 `detail`(영문 + 프론트에서 한국어 매핑)과 정책이 다른 이유: 이건 실패 응답이 아니라
+    200 본문에 담기는 부분 실패 보고라, 날짜/개수 같은 값이 문장에 섞여 들어간다
+    (AI 추천의 `warnings`가 이미 같은 방식이다 — ADR-0012).
+    """
+
+    day_id: int
+    date: dt.date
+    reason_code: str
+    message: str
+
+
+class SortItineraryResultRead(ORMModel):
+    """정렬 결과. 실패한 날짜가 있어도 200이며, 성공한 날짜는 이미 저장된 상태다.
+
+    sorted_days: 순서를 다시 계산한 날짜 (프론트는 이 day_id들의 일정 캐시만 무효화하면 된다)
+    skipped_days: 정렬할 것이 없어 아무것도 하지 않은 날짜 (일정 0~1개) — 조치 불필요
+    failed_days: 시작점을 정할 수 없어 실패한 날짜 — **사용자 조치 필요**(안내문 포함)
+    """
+
+    trip_id: int
+    style: str
+    sorted_days: list[SortedDayRead]
+    skipped_days: list[DaySortIssueRead]
+    failed_days: list[DaySortIssueRead]
+    warnings: list[str] = Field(default_factory=list)
 
 
 # 체크리스트 항목 텍스트 상한. DB 컬럼 제약이 아니라 입력 검증으로만 둔다
@@ -465,13 +567,17 @@ class ParticipantRead(ORMModel):
 
 class AppSettingsRead(BaseModel):
     participants: list[ParticipantRead]
+    # 일정 AI 정렬 기능 온/오프(ADR-0012). 프론트는 이 값으로 버튼을 숨기고,
+    # 서버는 같은 값으로 API를 막는다(둘 중 하나만으로는 "껐다"가 지켜지지 않는다).
+    route_sort_enabled: bool = True
 
 
 class AppSettingsUpdate(BaseModel):
-    """`PATCH /api/settings` 바디. 바꿀 슬롯만 담는 부분 갱신 맵.
+    """`PATCH /api/settings` 바디. 바꿀 항목만 담는 부분 갱신.
 
     ```jsonc
     {"participants": {"participant_1": "새이름"}}   // participant_2는 그대로
+    {"route_sort_enabled": false}                  // 참가자 이름은 그대로
     ```
 
     맵으로 받는 이유: 슬롯 키가 이미 `GET /api/settings` 응답의 어휘라, 프론트가
@@ -483,6 +589,18 @@ class AppSettingsUpdate(BaseModel):
     """
 
     participants: dict[str, str] = Field(default_factory=dict)
+    # `None` = "안 바꿈". 컬럼이 NOT NULL이라 명시적 null은 아래 validator가 422로 막는다
+    # (참가자 이름과 같은 정책 — "안 바꿈"은 null이 아니라 **필드를 빼는 것**으로 표현한다).
+    route_sort_enabled: bool | None = None
+
+    @field_validator("route_sort_enabled")
+    @classmethod
+    def _validate_route_sort_enabled(cls, value: bool | None) -> bool:
+        # 이 validator가 호출됐다는 것 자체가 클라이언트가 값을 명시적으로 보냈다는 뜻이다
+        # (필드를 생략하면 기본값 None이 validate_default 없이는 validator를 타지 않는다).
+        if value is None:
+            raise ValueError("route_sort_enabled must not be null")
+        return value
 
     @field_validator("participants")
     @classmethod
