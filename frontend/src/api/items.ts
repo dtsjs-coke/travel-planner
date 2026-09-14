@@ -17,6 +17,9 @@ export interface ItemCreateInput {
   /** 결제자 **슬롯 키**("participant_1"/"participant_2"). 이름 문자열을 보내면 422(ADR-0007). */
   paid_by?: string
   url?: string
+  /** 등록 시점에 구글이 채워주는 값(추가 비용 0). 수동 입력이면 비워둔다(ADR-0011). */
+  place_category?: string
+  region_name?: string
 }
 
 export async function listItems(dayId: number): Promise<ItineraryItem[]> {
@@ -40,6 +43,13 @@ export interface ItemUpdateInput {
   cost_currency?: string | null
   /** 슬롯 키 또는 `null`(미지정으로 되돌리기). 이름 문자열은 422. */
   paid_by?: string | null
+  /** `"09:30"` 형태. `null`은 "지운다"(서버는 `"09:30:00"`으로 돌려준다 — 표시 시
+   * `slice(0, 5)` 필요, ADR-0011 §5). */
+  start_time?: string | null
+  /** 명시적 `null`도 빈 문자열도 "지움"으로 서버가 처리한다(ADR-0011). */
+  notes?: string | null
+  place_category?: string | null
+  region_name?: string | null
 }
 
 export async function updateItem(itemId: number, input: ItemUpdateInput): Promise<ItineraryItem> {

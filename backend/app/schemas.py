@@ -21,6 +21,16 @@ MAX_TRIP_NAME_LENGTH = 100
 # 다소 긴 값도 들어올 수 있어 여행 이름보다 여유를 조금 더 둔다.
 MAX_ITINERARY_ITEM_TITLE_LENGTH = 150
 
+# 일정 상세보기에서 채워지는 선택 필드들의 길이 상한(ADR-0011). 전부 같은 이유다 —
+# 컬럼 제약이 아니라 입력 검증으로만 두고(마이그레이션 불필요), 무료 티어 DB에
+# 수 MB짜리 붙여넣기가 들어오는 것을 막는다.
+MAX_PLACE_CATEGORY_LENGTH = 50  # "문화센터", "한식당" 수준의 짧은 라벨
+MAX_REGION_NAME_LENGTH = 100  # "광주광역시 동구"
+# 자유 입력칸(알아본 정보/링크 메모). 위 셋보다 훨씬 넉넉하지만 무제한은 아니다 —
+# 이번에 처음으로 **사용자가 직접 타이핑하는 칸**이 생기므로 상한을 함께 둔다
+# (AI 추천이 넣는 한 줄 이유는 200자라 영향 없다).
+MAX_ITEM_NOTES_LENGTH = 2000
+
 
 def _validate_name_length(value: str, *, field_label: str, max_length: int) -> str:
     """이름/제목류 필드의 길이 상한을 검증한다(trim 등 다른 정규화는 하지 않는다 —
@@ -73,6 +83,26 @@ def _normalize_cost_amount(value: float | None) -> float | None:
     if value < 0:
         raise ValueError("cost_amount must not be negative")
     return value
+
+
+def _normalize_optional_text(value: str | None, *, field_label: str, max_length: int) -> str | None:
+    """상세보기의 선택 텍스트 필드(카테고리/지역명/영업시간/자유 메모)를 정규화한다.
+
+    `paid_by`와 같은 정책이다 — **명시적 null도, 빈 문자열도 "지움"(None)으로 본다.**
+    전부 nullable 컬럼이고, 사용자가 입력칸을 비우는 건 정상적인 조작이다. 프론트의
+    `<input>`은 지운 값을 빈 문자열로 보내므로, 그걸 422로 튕기면 화면 쪽에
+    "빈 문자열이면 null로 바꿔 보내기" 같은 변환 코드가 생긴다.
+
+    `strip()`은 양끝만 다듬으므로 영업시간/메모의 **줄바꿈은 그대로 보존된다**.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    if len(stripped) > max_length:
+        raise ValueError(f"{field_label} must be at most {max_length} characters")
+    return stripped
 
 
 def _normalize_cost_currency(value: str | None) -> str | None:
@@ -192,7 +222,41 @@ class TripUpdateResult(TripDetailRead):
     out_of_range_days: list[OutOfRangeDayRead] = []
 
 
-class ItineraryItemCreate(BaseModel):
+class PlaceDetailFields(BaseModel):
+    """일정 상세보기에서 보여주고 고치는 선택 필드들(ADR-0011).
+
+    Create와 Update가 **정책이 완전히 같아서**(전부 nullable, 빈 값 = 지움) 한 곳에 모았다.
+    `title`/`cost_amount`처럼 생성과 수정의 null 정책이 갈리는 필드는 여기 넣지 않는다.
+    """
+
+    place_category: str | None = None
+    region_name: str | None = None
+
+    @field_validator("place_category")
+    @classmethod
+    def _validate_place_category(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(
+            value, field_label="place_category", max_length=MAX_PLACE_CATEGORY_LENGTH
+        )
+
+    @field_validator("region_name")
+    @classmethod
+    def _validate_region_name(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(
+            value, field_label="region_name", max_length=MAX_REGION_NAME_LENGTH
+        )
+
+    @field_validator("notes", check_fields=False)
+    @classmethod
+    def _validate_notes(cls, value: str | None) -> str | None:
+        # `notes`는 이 믹스인이 선언하지 않고 Create/Update가 각각 가지고 있다
+        # (원래 있던 필드의 선언 위치를 옮기지 않기 위함) → `check_fields=False`.
+        return _normalize_optional_text(
+            value, field_label="notes", max_length=MAX_ITEM_NOTES_LENGTH
+        )
+
+
+class ItineraryItemCreate(PlaceDetailFields):
     source: str = "manual"  # "google_places" | "manual"
     title: str
     category: str | None = None
@@ -234,7 +298,7 @@ class ItineraryItemCreate(BaseModel):
         return _normalize_paid_by(value)
 
 
-class ItineraryItemUpdate(BaseModel):
+class ItineraryItemUpdate(PlaceDetailFields):
     title: str | None = None
     category: str | None = None
     address: str | None = None
@@ -300,6 +364,10 @@ class ItineraryItemRead(ORMModel):
     cost_currency: str | None
     paid_by: str | None
     url: str | None
+    # 상세보기용 필드(ADR-0011). 장소를 등록할 때 Places 검색 응답에서 채워지고,
+    # 이후로는 사용자가 상세보기에서 직접 고친다.
+    place_category: str | None
+    region_name: str | None
 
 
 class ReorderItemsRequest(BaseModel):

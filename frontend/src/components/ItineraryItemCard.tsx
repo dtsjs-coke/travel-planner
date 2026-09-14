@@ -4,6 +4,8 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Day, ItineraryItem, Participant } from '../types/models'
 import type { ItineraryItemPatch } from '../types/dayEditor'
 import MoveItemControl from './MoveItemControl'
+import ItineraryItemDetailModal from './ItineraryItemDetailModal'
+import { getGoogleMapsLink } from '../lib/googleMapsLink'
 
 interface Props {
   item: ItineraryItem
@@ -41,6 +43,12 @@ export default function ItineraryItemCard({
 
   const [isEditing, setIsEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(item.title)
+  const [showDetail, setShowDetail] = useState(false)
+
+  // "09:30:00" -> "09:30". 값이 없으면 카드에 아무것도 표시하지 않는다(시간 미지정은
+  // 정상 상태라 자리만 차지하는 "시간 미정" 문구를 강제하지 않는다).
+  const startTimeLabel = item.start_time ? item.start_time.slice(0, 5) : null
+  const mapsLink = getGoogleMapsLink(item)
 
   // 금액 입력은 제목과 달리 "지우기"(빈 값 -> null)가 정상 조작이라 별도 draft로 관리한다
   // (ADR-0006). `null` = "편집 중이 아니다" — 이펙트로 나중에 동기화하지 않고, 편집 중이
@@ -134,23 +142,42 @@ export default function ItineraryItemCard({
             </button>
           </form>
         ) : (
-          <span
-            className="min-w-0 flex-1 cursor-pointer truncate text-slate-800"
-            onClick={startEditing}
-            title="클릭하여 이름 수정"
-          >
-            {item.title}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                startEditing()
-              }}
-              className="ml-1 text-slate-400 hover:text-slate-600"
+              type="button"
+              onClick={() => setShowDetail(true)}
+              className="min-w-0 flex-1 truncate text-left text-slate-800 hover:underline"
+              title="클릭하여 상세보기"
+            >
+              {item.title}
+            </button>
+            {startTimeLabel && (
+              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                {startTimeLabel}
+              </span>
+            )}
+            {mapsLink && (
+              <a
+                href={mapsLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 text-sm text-blue-600 hover:underline"
+                title="구글지도에서 보기"
+                aria-label="구글지도에서 보기"
+              >
+                📍
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={startEditing}
+              className="shrink-0 text-sm text-slate-400 hover:text-slate-600"
               aria-label="이름 수정"
             >
-              ✎
+              수정
             </button>
-          </span>
+          </div>
         )}
       </div>
       <div className="ml-2 flex shrink-0 items-center gap-2">
@@ -190,6 +217,8 @@ export default function ItineraryItemCard({
         </select>
         {updateError && <p className="w-full text-xs text-red-600">{updateError}</p>}
       </div>
+
+      {showDetail && <ItineraryItemDetailModal item={item} onClose={() => setShowDetail(false)} />}
     </li>
   )
 }

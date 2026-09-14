@@ -67,6 +67,10 @@ export default function AddItemModal({ dayId, existingItems, onClose }: Props) {
       lat: place.lat,
       lng: place.lng,
       place_id: place.place_id,
+      // 검색 응답에 추가 비용 없이 실려 오는 값이라 등록 시점에 그대로 저장한다(ADR-0011) —
+      // 빠뜨리면 이 항목은 상세보기를 열 때까지 카테고리/지역이 계속 비어 있다.
+      place_category: place.category ?? undefined,
+      region_name: place.region ?? undefined,
     })
   }
 

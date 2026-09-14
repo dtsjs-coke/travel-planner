@@ -89,6 +89,9 @@ class ItineraryItem(SQLModel, table=True):
     )
     position: int = 0
     title: str
+    # **주의: 이 컬럼은 "장소 분류"가 아니다.** AI 추천이 만든 항목에는 동선 역할 코드
+    # (`arrival`/`departure`/`lodging`/`activity`/`meal`/`cafe`)가 들어 있고(ADR-0009/0010),
+    # 수동 항목에는 아무것도 안 들어 있다. 사람이 읽는 장소 분류는 아래 `place_category`다.
     category: str | None = None
     source: str = "manual"  # "google_places" | "manual"
     place_id: str | None = None
@@ -98,6 +101,18 @@ class ItineraryItem(SQLModel, table=True):
     start_time: dt.time | None = None
     end_time: dt.time | None = None
     notes: str | None = None
+
+    # --- 상세보기용 장소 정보 (ADR-0011) ------------------------------------------
+    # 둘 다 "Places에서 받아 채우되 **사용자가 덮어쓸 수 있는**" 값이다. 그래서 출처를
+    # 구분하는 플래그를 두지 않는다 — 서버는 장소를 **등록할 때만** 채우므로 사용자가 고친
+    # 값이 나중에 덮여쓰일 일이 없고, 화면도 "누가 넣었는지"에 따라 다르게 보여줄 이유가 없다.
+    # Places가 못 주는 지역/카테고리는 드물지 않은 정상 상황이라 NULL을 허용한다.
+    # 둘 다 **검색 응답에 이미 실려 오는(= 추가 비용 0)** 값이다. 영업시간은 더 비싼
+    # 요금 티어라 기능째로 철회했다(ADR-0011 "철회 기록") — 다시 넣자는 얘기가 나오면
+    # 여기에 컬럼을 더하기 전에 그 섹션을 먼저 읽을 것.
+    place_category: str | None = None  # 사람이 읽는 분류 라벨 ("문화센터", "한식당")
+    region_name: str | None = None  # "광주광역시 동구"
+
     cost_amount: float | None = None
     cost_currency: str | None = None
     # 이 비용을 결제한 사람의 **참가자 슬롯 키**("participant_1"/"participant_2").

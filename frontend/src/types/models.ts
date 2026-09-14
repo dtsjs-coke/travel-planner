@@ -67,6 +67,11 @@ export interface ItineraryItem {
    * 이름은 `/api/settings`(`AppSettings`)에서 조회해 붙인다(ADR-0007). */
   paid_by: string | null
   url: string | null
+  /** 사람이 읽는 장소 분류("문화센터"). 등록 시점에 구글이 채워주거나(추가 비용 0), 없으면
+   * 사용자가 상세보기에서 직접 입력한다(ADR-0011). */
+  place_category: string | null
+  /** 지역명("광주광역시 동구"). 사용자가 직접 고칠 수 있다(ADR-0011). */
+  region_name: string | null
 }
 
 /** 마스터 환경설정의 참가자 한 명. `key`는 저장/전송에, `name`은 표시에 쓴다. */
