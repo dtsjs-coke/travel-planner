@@ -6,9 +6,8 @@ import { getTrip } from '../api/trips'
 import { createDay } from '../api/days'
 import { deleteItem, moveItem, reorderItems, updateItem, type ItemUpdateInput } from '../api/items'
 import { getSettings } from '../api/settings'
-import { setRouteEndpoints, type SortItineraryResult } from '../api/itinerarySort'
+import type { SortItineraryResult } from '../api/itinerarySort'
 import { extractErrorMessage } from '../lib/errors'
-import { computeNextRouteEndpoints, type RouteRole } from '../lib/routeEndpoints'
 import AddItemModal from '../components/AddItemModal'
 import CalendarIllustration from '../components/CalendarIllustration'
 import DayEditorDesktop from '../components/DayEditorDesktop'
@@ -35,9 +34,6 @@ export default function DayEditorPage() {
 
   const days = trip?.days ?? []
   const { itemsByDayId, isLoading: itemsLoading, errorDayIds: itemsErrorDayIds } = useTripItems(days)
-  // 여행에서 날짜순으로 가장 이른 Day(ADR-0012의 "첫날"). `days`는 이미 날짜순으로 온다(다른
-  // 화면도 index 0을 "Day1"로 취급한다 — `getDayLabel`).
-  const firstDayId = days[0]?.id ?? null
 
   // 결제자 선택박스/표시에 쓰는 참가자 목록 + 일정 AI 정렬 토글. 값이 바뀌면 `['settings']`만
   // 무효화해도 여기서 자동으로 새 값을 받아온다(ADR-0007) — 일정 캐시를 따로 건드릴 필요가 없다.
@@ -136,30 +132,6 @@ export default function DayEditorPage() {
     },
   })
 
-  // 일정 AI 정렬(ADR-0012) — 시작점/끝점 지정.
-  const [routeRoleError, setRouteRoleError] = useState<string | null>(null)
-  const setRouteEndpointsMutation = useMutation({
-    mutationFn: ({
-      dayId,
-      body,
-    }: {
-      dayId: number
-      body: { start_item_id: number | null; end_item_id: number | null }
-    }) => setRouteEndpoints(dayId, body),
-    onSuccess: (_items, { dayId }) => {
-      setRouteRoleError(null)
-      queryClient.invalidateQueries({ queryKey: ['days', dayId, 'items'] })
-    },
-    onError: (err) => {
-      setRouteRoleError(extractErrorMessage(err, '시작점/끝점을 지정하지 못했습니다.'))
-    },
-  })
-
-  function handleSetRouteRole(dayId: number, itemId: number, role: RouteRole) {
-    const body = computeNextRouteEndpoints(itemsByDayId[dayId] ?? [], itemId, role)
-    setRouteEndpointsMutation.mutate({ dayId, body })
-  }
-
   // 일정 AI 정렬 — 날짜 선택/실행 모달 + 결과 배너.
   const [showSortModal, setShowSortModal] = useState(false)
   const [sortResult, setSortResult] = useState<SortItineraryResult | null>(null)
@@ -199,8 +171,6 @@ export default function DayEditorPage() {
         { dayId, itemId, targetDayId },
         { onSuccess: () => onMoved?.(targetDayId) },
       ),
-    firstDayId,
-    onSetRouteRole: handleSetRouteRole,
   }
 
   return (
@@ -224,10 +194,6 @@ export default function DayEditorPage() {
           </button>
         )}
       </div>
-
-      {routeRoleError && (
-        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{routeRoleError}</p>
-      )}
 
       {sortResult && <ItinerarySortResultBanner result={sortResult} onDismiss={() => setSortResult(null)} />}
 

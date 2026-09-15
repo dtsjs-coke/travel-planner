@@ -369,11 +369,6 @@ class ItineraryItemRead(ORMModel):
     # 이후로는 사용자가 상세보기에서 직접 고친다.
     place_category: str | None
     region_name: str | None
-    # 일정 AI 정렬의 시작점/끝점 지정(ADR-0012). `"start"` / `"end"` / null.
-    # **Create/Update 스키마에는 일부러 없다** — 이 값은 "Day당 하나"라는 제약이 있어서
-    # 다른 항목의 역할을 함께 지워야 하고, 그건 단일 항목 PATCH가 할 수 있는 일이 아니다.
-    # 지정은 `PUT /api/days/{id}/route-endpoints` 한 곳에서만 한다.
-    route_role: str | None
 
 
 class ReorderItemsRequest(BaseModel):
@@ -390,27 +385,10 @@ class MoveItemRequest(BaseModel):
     target_day_id: int
 
 
-# --- 일정 AI 정렬 (ADR-0012) ----------------------------------------------------
+# --- 일정 AI 정렬 (ADR-0012 → ADR-0013으로 개정) ---------------------------------
 # 한 요청에 담을 수 있는 날짜 수 상한은 "여행 하나가 가질 수 있는 Day 총개수"와 같다
 # (`MAX_TRIP_TOTAL_DAYS`). 어차피 그보다 많은 Day는 존재할 수 없으므로 이 상한은
 # "말도 안 되게 큰 배열"만 걸러내는 용도다 — 외부 호출이 없어 비용 상한은 필요 없다.
-
-
-class RouteEndpointsUpdate(BaseModel):
-    """`PUT /api/days/{day_id}/route-endpoints` 바디. 그 Day의 시작점/끝점 지정.
-
-    ```jsonc
-    {"start_item_id": 12, "end_item_id": 17}   // 지정
-    {"start_item_id": null, "end_item_id": null}  // 둘 다 해제
-    ```
-
-    PATCH가 아니라 **PUT**인 이유: 두 역할은 함께 의미를 갖고(시작만 있고 끝이 없는 첫날은
-    정렬이 실행되지 않는다), 매번 전체를 보내면 "필드 생략 vs 명시적 null"이라는 이
-    저장소의 단골 함정이 아예 생기지 않는다. 생략하면 `null`(= 해제)이다.
-    """
-
-    start_item_id: int | None = None
-    end_item_id: int | None = None
 
 
 class SortItineraryRequest(BaseModel):

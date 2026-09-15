@@ -22,8 +22,6 @@ export default function DayEditorDesktop({
   onUpdateItem,
   onReorderItems,
   onMoveItem,
-  firstDayId,
-  onSetRouteRole,
 }: DayEditorViewProps) {
   const [selectedDayId, setSelectedDayId] = useState<number | null>(null)
   const activeDayId = selectedDayId ?? days[0]?.id ?? null
@@ -76,12 +74,10 @@ export default function DayEditorDesktop({
                   moveVariant="dropdown"
                   participants={participants}
                   hasError={itemsErrorDayIds.includes(activeDayId)}
-                  isFirstDay={activeDayId === firstDayId}
                   onDelete={(itemId) => onDeleteItem(activeDayId, itemId)}
                   onUpdateTitle={(itemId, title) => onUpdateItemTitle(activeDayId, itemId, title)}
                   onUpdateItem={(itemId, patch, onError) => onUpdateItem(activeDayId, itemId, patch, onError)}
                   onMove={(itemId, targetDayId) => onMoveItem(activeDayId, itemId, targetDayId)}
-                  onSetRouteRole={(itemId, role) => onSetRouteRole(activeDayId, itemId, role)}
                 />
               </DndContext>
             )}

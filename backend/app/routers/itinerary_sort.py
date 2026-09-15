@@ -1,8 +1,14 @@
-"""일정 AI 정렬 라우터 (ADR-0012).
+"""일정 AI 정렬 라우터 (ADR-0012 → **ADR-0013으로 개정**).
 
 `items.py`(일정 CRUD)에 넣지 않고 분리한 이유는 `checklist.py`/`settlement.py`/`export.py`를
-뺀 것과 같다 — 여기 있는 두 엔드포인트는 **하나의 기능**이고, 둘 다 마스터 환경설정의
-토글 하나에 함께 매여 있다(꺼지면 둘 다 403).
+뺀 것과 같다 — 이 기능은 마스터 환경설정의 토글 하나에 매인 독립된 기능이고, 계산 로직이
+`services/itinerary_sort.py` 한 곳에 모여 있다.
+
+**ADR-0013에서 엔드포인트가 둘에서 하나로 줄었다.** 사용자가 시작/끝점을 직접 찍던
+`PUT /api/days/{day_id}/route-endpoints`는 사라졌다 — 그 지정은 이제 "사용자가 이미 드래그로
+배치해둔 현재 순서"와 "숙박시설 카테고리"에서 서버가 매번 다시 읽어내고, 확인이 필요한
+세 지점(여행의 출발점 / 첫날의 종점 / 여행의 도착점)은 **프론트가 정렬 실행 전에 띄우는
+확인 대화상자**로 대신한다. 그 확인은 서버에 남는 상태가 아니므로 API가 필요 없다.
 
 이 기능은 외부 API를 전혀 호출하지 않는다(순수 좌표 계산). AI 추천 라우터와 달리
 `async def`가 아닌 이유이기도 하다 — 기다릴 I/O가 없고, 짧은 DB 작업뿐이다.
@@ -15,20 +21,10 @@ from sqlmodel import Session
 
 from app.db import get_db
 from app.deps import require_session
-from app.models import Day, Trip
-from app.schemas import (
-    ItineraryItemRead,
-    RouteEndpointsUpdate,
-    SortItineraryRequest,
-    SortItineraryResultRead,
-)
+from app.models import Trip
+from app.schemas import SortItineraryRequest, SortItineraryResultRead
 from app.services.app_settings import load_app_settings
-from app.services.itinerary_sort import (
-    InvalidDaySelectionError,
-    MissingRouteEndpointsError,
-    set_route_endpoints,
-    sort_trip_itinerary,
-)
+from app.services.itinerary_sort import InvalidDaySelectionError, sort_trip_itinerary
 
 router = APIRouter(tags=["itinerary-sort"], dependencies=[Depends(require_session)])
 
@@ -62,42 +58,16 @@ def _require_feature_enabled(db: Session) -> None:
         raise HTTPException(status_code=403, detail=_FEATURE_DISABLED_DETAIL)
 
 
-@router.put("/api/days/{day_id}/route-endpoints", response_model=list[ItineraryItemRead])
-def put_route_endpoints(
-    day_id: int, body: RouteEndpointsUpdate, db: Session = Depends(get_db)
-):
-    """그 Day의 시작점/끝점을 지정한다(둘 다 한 번에, `null`이면 해제).
-
-    여행 첫날에는 이 지정이 **정렬의 선행 조건**이다(둘째 날부터는 전날의 끝 장소가
-    시작점이 되고 끝점은 알고리즘이 정한다 — ADR-0012). 다만 서버는 어느 Day에든 지정을
-    허용한다: 규칙이 "지정이 있으면 그것을 고정한다"로 균일해서 특별 취급이 오히려 코드를
-    늘리고, 나중에 "이 날만 시작점을 따로 잡고 싶다"가 나와도 서버 변경이 필요 없다.
-
-    응답은 `POST /api/days/{id}/items/reorder`와 같이 **그 Day의 전체 일정 목록**이라,
-    프론트가 캐시를 통째로 갈아끼울 수 있다.
-    """
-    _require_feature_enabled(db)
-
-    day = db.get(Day, day_id)
-    if not day:
-        raise HTTPException(status_code=404, detail="Day not found")
-
-    try:
-        items = set_route_endpoints(
-            db, day=day, start_item_id=body.start_item_id, end_item_id=body.end_item_id
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return items
-
-
 @router.post("/api/trips/{trip_id}/sort-itinerary", response_model=SortItineraryResultRead)
 def sort_itinerary(trip_id: int, body: SortItineraryRequest, db: Session = Depends(get_db)):
     """선택한 날짜들의 일정을 최적 방문 순서로 재정렬한다.
 
     외부 API를 호출하지 않는다(등록된 좌표만으로 계산). 상태 코드:
     200(부분 성공 포함) / 401 / 403(기능 꺼짐) / 404(여행 없음) /
-    422(day_ids가 이 여행 것이 아님 · 첫날 시작/끝점 미지정).
+    422(day_ids가 이 여행 것이 아님 · 빈 day_ids · 모르는 style).
+
+    **ADR-0013 이후로 "첫날 시작/끝점 미지정" 422는 없다.** 그 확인은 프론트의 확인
+    대화상자로 옮겨졌고, 서버는 첫날의 현재 순서상 처음/마지막 항목을 그대로 양 끝으로 쓴다.
 
     **부분 실패는 200이다.** 어떤 날짜를 정렬하지 못하는 것은 서버 오류가 아니라
     "그 날짜의 데이터가 부족하다"는 상태이고, 다른 날짜는 정상 처리됐기 때문이다
@@ -117,6 +87,6 @@ def sort_itinerary(trip_id: int, body: SortItineraryRequest, db: Session = Depen
             result = sort_trip_itinerary(
                 db, trip=trip, day_ids=body.day_ids, style=body.style
             )
-        except (InvalidDaySelectionError, MissingRouteEndpointsError) as exc:
+        except InvalidDaySelectionError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result

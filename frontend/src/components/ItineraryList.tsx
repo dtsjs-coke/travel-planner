@@ -3,7 +3,6 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { dayDroppableId } from '../lib/dndDrop'
 import type { Day, ItineraryItem, Participant } from '../types/models'
 import type { ItineraryItemPatch } from '../types/dayEditor'
-import type { RouteRole } from '../lib/routeEndpoints'
 import ItineraryItemCard from './ItineraryItemCard'
 
 interface Props {
@@ -16,14 +15,10 @@ interface Props {
   /** 이 Day의 일정 조회가 실패했는지(`useTripItems`). 빈 목록일 때 "일정이 없습니다"
    * 대신 "불러오지 못했습니다" 안내를 보여주는 데만 쓴다. */
   hasError?: boolean
-  /** 이 Day가 여행의 첫날(달력상 가장 이른 Day)인지. 일정 AI 정렬의 시작점/끝점 지정 UI는
-   * 첫날에서만 노출한다(ADR-0012, ui-dev 후속 스펙). */
-  isFirstDay?: boolean
   onDelete: (itemId: number) => void
   onUpdateTitle: (itemId: number, title: string) => void
   onUpdateItem: (itemId: number, patch: ItineraryItemPatch, onError?: (message: string) => void) => void
   onMove: (itemId: number, targetDayId: number) => void
-  onSetRouteRole: (itemId: number, role: RouteRole) => void
 }
 
 /**
@@ -38,12 +33,10 @@ export default function ItineraryList({
   moveVariant,
   participants,
   hasError = false,
-  isFirstDay = false,
   onDelete,
   onUpdateTitle,
   onUpdateItem,
   onMove,
-  onSetRouteRole,
 }: Props) {
   // 항목이 없는 Day는 드롭 대상으로 삼을 항목 droppable이 하나도 없어서 드래그로 옮겨올 수가 없다.
   // 그래서 빈 목록일 때만 목록 영역 자체를 컨테이너 droppable로 등록한다(항목이 있으면 setNodeRef를
@@ -69,12 +62,10 @@ export default function ItineraryList({
             days={days}
             moveVariant={moveVariant}
             participants={participants}
-            canDesignateRouteRole={isFirstDay}
             onDelete={onDelete}
             onUpdateTitle={onUpdateTitle}
             onUpdateItem={onUpdateItem}
             onMove={onMove}
-            onSetRouteRole={onSetRouteRole}
           />
         ))}
       </ol>

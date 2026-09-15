@@ -72,9 +72,6 @@ export interface ItineraryItem {
   place_category: string | null
   /** 지역명("광주광역시 동구"). 사용자가 직접 고칠 수 있다(ADR-0011). */
   region_name: string | null
-  /** 일정 AI 정렬의 시작점/끝점 지정(ADR-0012). `PUT /api/days/{id}/route-endpoints`로만 바뀐다 —
-   * 이 값을 바꾸는 별도의 Create/Update 입력은 없다(카드에 배지 표시용으로만 쓴다). */
-  route_role: 'start' | 'end' | null
 }
 
 /** 마스터 환경설정의 참가자 한 명. `key`는 저장/전송에, `name`은 표시에 쓴다. */

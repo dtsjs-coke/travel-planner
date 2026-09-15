@@ -1,7 +1,15 @@
 # ADR-0012: 일정 AI 정렬 — LLM 없이 좌표만으로, 연속성은 달력 기준, 실패는 날짜 단위
 
+> **⚠ 일부 결정이 대체되었다 — 먼저 [ADR-0013](0013-itinerary-route-sort-anchors-by-lodging.md)을 읽을 것 (2026-09-16).**
+> 배포 다음 날 사용자가 핵심 UX를 바꿨다. **결정 2(`route_role` 컬럼 + `PUT /route-endpoints`),
+> 결정 3(둘째 날부터 끝점은 알고리즘이 정함), 결정 6(첫날 미지정 422)은 더 이상 유효하지 않다.**
+> 그 자리에는 "실행 전 확인 대화상자 + 숙박시설 개수로 양 끝 판정"이 들어갔고, `route_role`
+> 컬럼은 마이그레이션 `e57c1b0a92d4`로 드롭됐다.
+> **나머지 결정(1 좌표 없는 항목 / 4 정렬 스타일 / 5 부분 성공 보고 / 7 기능 토글 /
+> 8 동시성)은 그대로 유효하다.** 이 문서는 기록으로 남기고 고치지 않는다(append-only).
+
 - **날짜**: 2026-09-15
-- **상태**: Accepted
+- **상태**: Superseded in part by [ADR-0013](0013-itinerary-route-sort-anchors-by-lodging.md) (결정 2·3·6)
 - **작성**: senior-dev (오케스트레이터 위임)
 - **관계**: [ADR-0009](0009-ai-trip-suggestion.md)/[ADR-0010](0010-lodging-continuity-and-transport-terminals.md)의
   `services/route_order.py`(haversine + 최근접 이웃)를 **재사용하고 확장한다**. 그 두 ADR의 결정은
