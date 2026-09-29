@@ -13,6 +13,7 @@ export async function getSettings(): Promise<AppSettings> {
 export interface SettingsUpdateInput {
   participants?: Record<string, string>
   route_sort_enabled?: boolean
+  ai_translate_enabled?: boolean
 }
 
 /** 응답은 항상 전체 설정이라 그대로 캐시에 넣을 수 있다(ADR-0007). */

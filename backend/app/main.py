@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.auth import router as auth_router
 from app.config import settings
 from app.routers.ai_suggestion import router as ai_suggestion_router
+from app.routers.ai_translate import router as ai_translate_router
 from app.routers.app_settings import router as app_settings_router
 from app.routers.checklist import router as checklist_router
 from app.routers.days import router as days_router
@@ -41,6 +42,7 @@ app.include_router(app_settings_router)
 app.include_router(export_router)
 app.include_router(places_router)
 app.include_router(ai_suggestion_router)
+app.include_router(ai_translate_router)
 
 
 def _scrub_non_finite(value: Any) -> Any:

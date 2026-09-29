@@ -1,5 +1,6 @@
 import datetime as dt
 import math
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -548,6 +549,9 @@ class AppSettingsRead(BaseModel):
     # 일정 AI 정렬 기능 온/오프(ADR-0012). 프론트는 이 값으로 버튼을 숨기고,
     # 서버는 같은 값으로 API를 막는다(둘 중 하나만으로는 "껐다"가 지켜지지 않는다).
     route_sort_enabled: bool = True
+    # 여행 도구함 AI 번역(유료, Gemini) 온/오프(ADR-0014). **기본 False** — 유료 기능은 켜는 스위치다.
+    # 프론트는 이 값으로 번역 탭을 "꺼짐 안내"로 바꾸고, 서버는 같은 값으로 번역 API를 403으로 막는다.
+    ai_translate_enabled: bool = False
 
 
 class AppSettingsUpdate(BaseModel):
@@ -570,14 +574,15 @@ class AppSettingsUpdate(BaseModel):
     # `None` = "안 바꿈". 컬럼이 NOT NULL이라 명시적 null은 아래 validator가 422로 막는다
     # (참가자 이름과 같은 정책 — "안 바꿈"은 null이 아니라 **필드를 빼는 것**으로 표현한다).
     route_sort_enabled: bool | None = None
+    ai_translate_enabled: bool | None = None
 
-    @field_validator("route_sort_enabled")
+    @field_validator("route_sort_enabled", "ai_translate_enabled")
     @classmethod
-    def _validate_route_sort_enabled(cls, value: bool | None) -> bool:
+    def _validate_flag_not_null(cls, value: bool | None, info) -> bool:
         # 이 validator가 호출됐다는 것 자체가 클라이언트가 값을 명시적으로 보냈다는 뜻이다
         # (필드를 생략하면 기본값 None이 validate_default 없이는 validator를 타지 않는다).
         if value is None:
-            raise ValueError("route_sort_enabled must not be null")
+            raise ValueError(f"{info.field_name} must not be null")
         return value
 
     @field_validator("participants")
@@ -810,3 +815,113 @@ class SettlementRead(ORMModel):
     unassigned_item_count: int
     excluded_currencies: list[CurrencyBucketRead]
     has_mixed_currency: bool
+
+
+# --- 여행 도구함: AI 번역 (유료, ADR-0014) ------------------------------------------
+# 이 앱에서 유일하게 "사용자가 버튼을 누를 때마다" Gemini 과금이 생기는 경로라, 입력 상한이
+# 곧 1회 비용 상한이다. 여행 회화 한두 문장(메뉴판 한 줄, 길 묻기) 용도로 500자면 충분하다.
+MAX_TRANSLATE_TEXT_LENGTH = 500
+
+# 번역 언어 화이트리스트. 자유 문자열로 받지 않는 이유: 이 값이 프롬프트에 들어가므로
+# 목록 밖 값을 허용하면 `text` 말고도 인젝션 입구가 하나 더 생긴다. 코드는 BCP-47 계열
+# (프론트 `Intl.DisplayNames`/`speechSynthesis`의 lang과 그대로 호환). 값은 프롬프트용 언어명.
+TRANSLATE_LANGUAGES: dict[str, str] = {
+    "ko": "Korean",
+    "en": "English",
+    "ja": "Japanese",
+    "zh-CN": "Simplified Chinese",
+    "zh-TW": "Traditional Chinese",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "id": "Indonesian",
+    "fr": "French",
+    "de": "German",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "ru": "Russian",
+}
+TRANSLATE_SOURCE_AUTO = "auto"
+
+
+def _normalize_translate_text(value: str) -> str:
+    """제어문자(개행 제외)를 지우고 앞뒤 공백을 자른다.
+
+    `extra_notes`(ADR-0009)와 달리 **개행은 남긴다** — 번역은 여러 줄 문장이 정상 입력이다.
+    프롬프트 구조 보호는 개행 제거가 아니라 구분자 블록 + "블록 안은 번역할 데이터일 뿐"이라는
+    시스템 지시 + 출력 스키마 강제가 맡는다(`services/ai_translate.py`).
+    """
+    chars: list[str] = []
+    for ch in value.replace("\r\n", "\n"):
+        if ch == "\n":
+            chars.append(ch)
+        elif ch.isspace():
+            # 탭·NBSP·전각 공백 등은 지우지 않고 일반 공백으로 바꾼다(지우면 단어가 붙는다).
+            chars.append(" ")
+        elif ch.isprintable():
+            chars.append(ch)
+        # 그 밖의 제어/서식 문자는 버린다.
+    # 연속 빈 줄은 한 줄로 줄인다 — 줄바꿈만으로 길이 상한을 채우는 입력을 막는다.
+    return re.sub(r"\n{3,}", "\n\n", "".join(chars)).strip()
+
+
+class TranslateRequest(BaseModel):
+    """`POST /api/ai/translate` 바디."""
+
+    text: str
+    source: str = TRANSLATE_SOURCE_AUTO
+    target: str
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        # 문구는 기존 체크리스트 `text` 검증과 **같은 문장**을 쓴다 — 프론트 에러 매핑
+        # (`errorMessages.ts`)이 이미 한국어로 옮겨주므로 새 매핑이 필요 없다.
+        cleaned = _normalize_translate_text(value)
+        if not cleaned:
+            raise ValueError("text must not be empty")
+        if len(cleaned) > MAX_TRANSLATE_TEXT_LENGTH:
+            raise ValueError(f"text must be at most {MAX_TRANSLATE_TEXT_LENGTH} characters")
+        return cleaned
+
+    @field_validator("source")
+    @classmethod
+    def _validate_source(cls, value: str) -> str:
+        if value != TRANSLATE_SOURCE_AUTO and value not in TRANSLATE_LANGUAGES:
+            allowed = ", ".join(TRANSLATE_LANGUAGES)
+            raise ValueError(f"source must be 'auto' or one of: {allowed}")
+        return value
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, value: str) -> str:
+        if value not in TRANSLATE_LANGUAGES:
+            allowed = ", ".join(TRANSLATE_LANGUAGES)
+            raise ValueError(f"target must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_distinct(self) -> "TranslateRequest":
+        if self.source == self.target:
+            raise ValueError("source and target must be different")
+        return self
+
+
+class TranslateResult(BaseModel):
+    """`POST /api/ai/translate` 응답.
+
+    - `pronunciation_ko`: 번역문을 **한글로 소리 나는 대로** 적은 것("스미마센"). 한국인
+      사용자가 그대로 읽어 말하는 용도. 목표 언어가 한국어면 null.
+    - `romanization`: 번역문의 로마자 표기(일본어 헵번식, 중국어 병음, 한국어 개정 로마자
+      등). 목표 언어가 라틴 문자권(en/fr/de/es/it/pt/vi/id)이면 null. (목표가 한국어면
+      개정 로마자를 반환한다.)
+    - `detected_source`: 실제 원문 언어(요청이 `auto`면 모델이 판별한 코드, 아니면 요청값).
+      화이트리스트 밖 언어로 판별되면 `"unknown"`.
+    """
+
+    translated_text: str
+    pronunciation_ko: str | None = None
+    romanization: str | None = None
+    source: str
+    detected_source: str
+    target: str

@@ -72,7 +72,7 @@ const EXACT_MESSAGES: Record<string, string> = {
 
   // --- AI 여행 추천 (app/routers/ai_suggestion.py, app/services/ai_trip_suggestion.py, ADR-0009) ---
   'GEMINI_API_KEY is not configured':
-    'AI 추천 기능이 아직 설정되지 않았습니다(관리자 확인 필요).',
+    'AI 기능이 아직 설정되지 않았습니다(관리자 확인 필요).',
   'AI suggestion failed for all plans': 'AI 추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.',
 
   // --- 일정 AI 정렬 (app/routers/itinerary_sort.py, app/schemas.py, ADR-0012/0013) ---
@@ -83,6 +83,14 @@ const EXACT_MESSAGES: Record<string, string> = {
   'day_ids must not be empty': '정렬할 날짜를 선택해주세요.',
   'style must be one of: nearest, farthest, balanced':
     '정렬 방식 값이 올바르지 않습니다. 새로고침 후 다시 시도해주세요.',
+
+  // --- AI 번역 (app/routers/ai_translate.py, app/schemas.py, ADR-0014) ---
+  'ai translate is disabled in app settings': '설정에서 AI 번역 기능이 꺼져 있습니다.',
+  'ai translate daily limit reached': '오늘 AI 번역 사용 한도에 도달했습니다. 내일 다시 이용해주세요.',
+  'AI translation failed': 'AI 번역에 실패했습니다. 잠시 후 다시 시도해주세요.',
+  'source and target must be different': '원문 언어와 번역할 언어가 같습니다.',
+  'ai_translate_enabled must not be null':
+    '설정 값이 올바르지 않습니다. 새로고침 후 다시 시도해주세요.',
 }
 
 /** 상한값 등 동적 값이 메시지 안에 섞여 있어 정규식으로 값만 뽑아 문장에 끼워 넣는 경우. */
@@ -172,6 +180,15 @@ const DYNAMIC_MESSAGE_RULES: Array<{
   {
     pattern: /^plan_count must be between (\d+) and (\d+)$/,
     translate: (m) => `추천 안 개수는 ${m[1]}~${m[2]}개 사이여야 합니다.`,
+  },
+  // --- AI 번역 (app/schemas.py: TranslateRequest, ADR-0014) ---
+  {
+    pattern: /^target must be one of: .+$/,
+    translate: () => '번역할 언어 값이 올바르지 않습니다. 새로고침 후 다시 시도해주세요.',
+  },
+  {
+    pattern: /^source must be 'auto' or one of: .+$/,
+    translate: () => '원문 언어 값이 올바르지 않습니다. 새로고침 후 다시 시도해주세요.',
   },
   // f"extra_notes must be at most {max} characters"
   {

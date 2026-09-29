@@ -100,6 +100,13 @@ export default function TripListPage() {
     <div className="mx-auto min-h-screen max-w-2xl p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-800">여행 목록</h1>
+        <div className="flex items-center gap-1">
+        <Link
+          to="/tools"
+          className="flex min-h-11 items-center gap-1 rounded-md px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-slate-500"
+        >
+          <span aria-hidden="true">🧰</span> 도구함
+        </Link>
         <button
           type="button"
           onClick={() => setShowSettings(true)}
@@ -109,6 +116,7 @@ export default function TripListPage() {
         >
           ⚙️
         </button>
+        </div>
       </div>
       {showSettings && <AppSettingsModal onClose={() => setShowSettings(false)} />}
       {showAiSuggestion && (

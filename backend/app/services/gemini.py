@@ -47,6 +47,7 @@ class GeminiClientProtocol(Protocol):
         prompt: str,
         response_schema: dict[str, Any],
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        temperature: float = 1.0,
     ) -> dict[str, Any]: ...
 
 
@@ -77,6 +78,7 @@ class GeminiClient:
         prompt: str,
         response_schema: dict[str, Any],
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        temperature: float = 1.0,
     ) -> dict[str, Any]:
         """프롬프트를 보내고 **스키마에 맞는 JSON 객체**를 받아 dict로 돌려준다.
 
@@ -92,8 +94,9 @@ class GeminiClient:
         generation_config: dict[str, Any] = {
             "responseMimeType": "application/json",
             "responseSchema": response_schema,
-            # 3개 안이 서로 달라야 의미가 있는 기능이라 온도를 낮추지 않는다.
-            "temperature": 1.0,
+            # 기본 1.0은 AI 여행 추천용이다(3개 안이 서로 달라야 의미가 있어 온도를 낮추지 않는다).
+            # 번역처럼 같은 입력에 같은 답이 나와야 하는 호출은 낮은 값을 넘긴다(ADR-0014).
+            "temperature": temperature,
         }
         if self._thinking_budget >= 0:
             generation_config["thinkingConfig"] = {"thinkingBudget": self._thinking_budget}

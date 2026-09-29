@@ -5,8 +5,9 @@
 - 참가자 두 명의 **표시 이름**. `ItineraryItem.paid_by`에는 이름이 아니라 슬롯 키
   (`participant_1`/`participant_2`)가 저장되므로, 이름 변경은 **이 행 하나만 갱신**하면
   끝나고 지출 데이터는 손대지 않는다 (ADR-0007).
-- **기능 토글** (`route_sort_enabled`). 설정 항목이 늘면 key-value가 아니라 컬럼을
-  추가한다는 ADR-0007의 결정을 그대로 따른다.
+- **기능 토글** (`route_sort_enabled`, `ai_translate_enabled`). 설정 항목이 늘면 key-value가
+  아니라 컬럼을 추가한다는 ADR-0007의 결정을 그대로 따른다. 무료 기능 토글은 기본 켜짐,
+  **유료 기능 토글은 기본 꺼짐**이다(ADR-0014).
 """
 
 import datetime as dt
@@ -21,6 +22,10 @@ from app.services.settlement import PARTICIPANT_1, PARTICIPANT_2, Participant
 # 싱글턴 행의 고정 PK. "설정은 하나뿐"을 코드가 아니라 기본키로 강제한다 —
 # 조건 없는 `SELECT ... LIMIT 1`을 쓰면 언젠가 두 번째 행이 생겨도 아무도 눈치채지 못한다.
 SETTINGS_ROW_ID = 1
+
+# 기능 토글(bool) 컬럼 목록. 토글이 늘면 여기와 모델/스키마/마이그레이션에 추가한다.
+# 부분 갱신·"바뀐 게 없으면 쓰지 않음" 판정이 이 목록을 돌기 때문에 토글별 분기가 필요 없다.
+_FLAG_COLUMNS: tuple[str, ...] = ("route_sort_enabled", "ai_translate_enabled")
 
 # 참가자 슬롯 키 → `AppSettings`의 이름 컬럼. 이 매핑이 키와 저장 위치를 잇는 유일한 지점이다.
 _KEY_TO_NAME_COLUMN: dict[str, str] = {
@@ -44,6 +49,7 @@ class AppSettingsState:
 
     participants: list[Participant]
     route_sort_enabled: bool
+    ai_translate_enabled: bool
 
 
 def _to_participants(row: AppSettings) -> list[Participant]:
@@ -55,7 +61,8 @@ def _to_participants(row: AppSettings) -> list[Participant]:
 
 def _to_state(row: AppSettings) -> AppSettingsState:
     return AppSettingsState(
-        participants=_to_participants(row), route_sort_enabled=row.route_sort_enabled
+        participants=_to_participants(row),
+        **{column: getattr(row, column) for column in _FLAG_COLUMNS},
     )
 
 
@@ -98,12 +105,14 @@ def update_app_settings(
     *,
     participants: dict[str, str],
     route_sort_enabled: bool | None = None,
+    ai_translate_enabled: bool | None = None,
 ) -> AppSettingsState:
     """설정을 부분 갱신한다. 주지 않은 항목은 그대로 둔다.
 
     `participants`는 스키마(`AppSettingsUpdate`)에서 이미 검증/정규화된 {슬롯 키: 이름} 맵이다
-    (빈 값·공백·모르는 키·길이 초과는 여기 오기 전에 422로 걸린다). `route_sort_enabled`는
-    `None`이면 "안 바꿈"이다(스키마가 명시적 null을 이미 422로 막는다).
+    (빈 값·공백·모르는 키·길이 초과는 여기 오기 전에 422로 걸린다). 토글 인자
+    (`route_sort_enabled`, `ai_translate_enabled`)는 `None`이면 "안 바꿈"이다(스키마가
+    명시적 null을 이미 422로 막는다).
 
     두 사람의 이름이 같아지면 `DuplicateParticipantNameError`를 던진다. 데이터가 깨지는
     건 아니지만("희경이 희경에게 5,000원 송금") 화면이 무의미해지고, 사용자가 의도했을 리 없다.
@@ -118,18 +127,27 @@ def update_app_settings(
     if len(set(resulting.values())) != len(resulting):
         raise DuplicateParticipantNameError("participant names must be different from each other")
 
-    resulting_flag = row.route_sort_enabled if route_sort_enabled is None else route_sort_enabled
+    requested_flags = {
+        "route_sort_enabled": route_sort_enabled,
+        "ai_translate_enabled": ai_translate_enabled,
+    }
+    resulting_flags = {
+        column: getattr(row, column) if requested_flags[column] is None else requested_flags[column]
+        for column in _FLAG_COLUMNS
+    }
 
     names_unchanged = all(
         getattr(row, column) == resulting[key] for key, column in _KEY_TO_NAME_COLUMN.items()
     )
-    if names_unchanged and resulting_flag == row.route_sort_enabled:
+    flags_unchanged = all(getattr(row, column) == resulting_flags[column] for column in _FLAG_COLUMNS)
+    if names_unchanged and flags_unchanged:
         # 바뀐 게 없으면 쓰지 않는다(빈 PATCH도 여기로 온다). 200 + 현재 값.
         return _to_state(row)
 
     for key, column in _KEY_TO_NAME_COLUMN.items():
         setattr(row, column, resulting[key])
-    row.route_sort_enabled = resulting_flag
+    for column, value in resulting_flags.items():
+        setattr(row, column, value)
     row.updated_at = dt.datetime.utcnow()
     db.add(row)
     db.commit()

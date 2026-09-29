@@ -19,7 +19,8 @@ router = APIRouter(
 
 @router.get("", response_model=AppSettingsRead)
 def get_app_settings(db: Session = Depends(get_db)):
-    """마스터 환경설정 조회. 참가자 두 명의 표시 이름 + 기능 토글.
+    """마스터 환경설정 조회. 참가자 두 명의 표시 이름 + 기능 토글
+    (무료 기능은 기본 켜짐, 유료 기능은 기본 꺼짐 — ADR-0014).
 
     조회에도 세션을 요구한다 — 이 앱은 공유 비밀번호를 모르면 아무것도 못 보는 구조라
     설정만 공개하면 인증 경계에 예외가 하나 생긴다. 참가자 이름은 실명이기도 하다.
@@ -32,7 +33,7 @@ def get_app_settings(db: Session = Depends(get_db)):
 @router.patch("", response_model=AppSettingsRead)
 def patch_app_settings(body: AppSettingsUpdate, db: Session = Depends(get_db)):
     """설정 부분 변경. 바꿀 항목만 보내면 된다(`{"participants": {"participant_1": "새이름"}}`,
-    `{"route_sort_enabled": false}`, 또는 둘 다).
+    `{"route_sort_enabled": false}`, `{"ai_translate_enabled": true}`, 또는 여러 개 함께).
 
     **기존 지출 데이터는 건드리지 않는다.** `ItineraryItem.paid_by`에는 이름이 아니라 슬롯 키가
     들어 있어서, 이 행 하나만 바뀌면 과거 지출도 자동으로 새 이름으로 보인다(ADR-0007).
@@ -42,6 +43,7 @@ def patch_app_settings(body: AppSettingsUpdate, db: Session = Depends(get_db)):
             db,
             participants=body.participants,
             route_sort_enabled=body.route_sort_enabled,
+            ai_translate_enabled=body.ai_translate_enabled,
         )
     except DuplicateParticipantNameError as exc:
         # 두 사람 이름이 같아지는 변경. 스키마만으로는 잡을 수 없다(다른 슬롯의 현재 값을

@@ -181,6 +181,13 @@ export default function DayEditorPage() {
       </Link>
       <div className="mb-4 mt-2 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-800">{trip.name}</h1>
+        <div className="flex shrink-0 items-center gap-2">
+        <Link
+          to={`/tools?trip=${tripIdNum}`}
+          className="flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >
+          <span aria-hidden="true">🧰</span> 도구함
+        </Link>
         {/* 여행 목록의 "✨ AI 추천"(새 여행 생성, ADR-0009)과 다른 기능이라 라벨/색상을 분명히
             구분한다. 기능 토글이 꺼져 있으면(마스터 환경설정) 서버도 403으로 막지만, 여기서
             먼저 숨겨 불필요한 요청/혼란을 막는다(ADR-0012 결정 7). */}
@@ -193,6 +200,7 @@ export default function DayEditorPage() {
             🧭 AI 정렬
           </button>
         )}
+        </div>
       </div>
 
       {sortResult && <ItinerarySortResultBanner result={sortResult} onDismiss={() => setSortResult(null)} />}

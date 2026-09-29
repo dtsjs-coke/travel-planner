@@ -33,6 +33,11 @@ class AppSettings(SQLModel, table=True):
     # 기본값 True: 이 토글은 "새로 켜는 스위치"가 아니라 **끄는 스위치**다(기능이 무료라
     # 기본으로 꺼두면 새 환경에서 기능이 고장난 것처럼 보인다).
     route_sort_enabled: bool = True
+    # "여행 도구함 > AI 번역"(ADR-0014) 온/오프. 이 앱에서 **호출할 때마다 돈이 드는** 기능이라
+    # 위 `route_sort_enabled`와 기본값이 반대다 — 유료 기능 토글은 **켜는 스위치**다(기본 False).
+    # 새 환경(로컬 DB 재생성, 운영 첫 배포)에서 아무도 모르게 과금이 시작되는 일을 막는다.
+    # 꺼져 있으면 프론트 숨김과 별개로 서버가 403으로 막는다(route_sort_enabled와 같은 정책).
+    ai_translate_enabled: bool = False
     updated_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
 
 

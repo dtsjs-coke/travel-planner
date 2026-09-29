@@ -47,6 +47,7 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
   const [name1, setName1] = useState(settings.participants[0]?.name ?? '')
   const [name2, setName2] = useState(settings.participants[1]?.name ?? '')
   const [routeSortEnabled, setRouteSortEnabled] = useState(settings.route_sort_enabled)
+  const [aiTranslateEnabled, setAiTranslateEnabled] = useState(settings.ai_translate_enabled)
   const [error, setError] = useState<string | null>(null)
 
   const updateMutation = useMutation({
@@ -85,6 +86,9 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
     const input: SettingsUpdateInput = {}
     if (Object.keys(patch).length > 0) input.participants = patch
     if (routeSortEnabled !== settings.route_sort_enabled) input.route_sort_enabled = routeSortEnabled
+    if (aiTranslateEnabled !== settings.ai_translate_enabled) {
+      input.ai_translate_enabled = aiTranslateEnabled
+    }
 
     if (Object.keys(input).length === 0) {
       onClose()
@@ -130,6 +134,21 @@ function SettingsForm({ settings, onClose }: SettingsFormProps) {
           type="checkbox"
           checked={routeSortEnabled}
           onChange={(e) => setRouteSortEnabled(e.target.checked)}
+          className="h-5 w-5 shrink-0 rounded border-slate-300"
+        />
+      </label>
+
+      <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600">
+        <span>
+          AI 번역 (유료 · Gemini)
+          <span className="block text-xs text-slate-400">
+            켜면 여행 도구함에서 AI 번역을 쓸 수 있습니다. 번역할 때마다 Gemini API 요금이 발생합니다(하루 최대 200회).
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={aiTranslateEnabled}
+          onChange={(e) => setAiTranslateEnabled(e.target.checked)}
           className="h-5 w-5 shrink-0 rounded border-slate-300"
         />
       </label>

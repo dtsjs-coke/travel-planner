@@ -85,6 +85,8 @@ export interface AppSettings {
   /** 일정 AI 정렬 기능 온/오프(ADR-0012). 꺼져 있으면 Day 편집 화면의 "AI 정렬" 진입점을
    * 프론트가 먼저 숨기고, 서버도 같은 값으로 관련 API를 403으로 막는다. */
   route_sort_enabled: boolean
+  /** AI 번역(유료 · Gemini) 온/오프(ADR-0014). 기본 false. 꺼져 있으면 서버가 403으로 막는다. */
+  ai_translate_enabled: boolean
 }
 
 export interface ParticipantTotal {
