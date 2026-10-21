@@ -5,6 +5,9 @@ export interface Trip {
   start_date: string | null
   end_date: string | null
   currency: string
+  /** 여행 가이드 페이지의 팁/추천 메모(ADR-0015). 여러 줄 자유 텍스트, 최대 5000자. 없으면 null.
+   * 두 사람이 공유하는 값이라 DB에 저장된다(브라우저 저장 아님). */
+  travel_tips: string | null
   created_at: string
   updated_at: string
 }
@@ -72,6 +75,8 @@ export interface ItineraryItem {
   place_category: string | null
   /** 지역명("광주광역시 동구"). 사용자가 직접 고칠 수 있다(ADR-0011). */
   region_name: string | null
+  /** 필수 방문 표시(ADR-0015). 여행 가이드의 큰 마커/별표 + "필수 명소만" 필터 기준. 기본 false. */
+  is_must_visit: boolean
 }
 
 /** 마스터 환경설정의 참가자 한 명. `key`는 저장/전송에, `name`은 표시에 쓴다. */

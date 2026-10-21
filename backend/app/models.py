@@ -48,6 +48,11 @@ class Trip(SQLModel, table=True):
     start_date: dt.date | None = None
     end_date: dt.date | None = None
     currency: str = "KRW"
+    # "여행 가이드" 페이지의 팁/추천 메모(ADR-0015). 여행 전체에 대한 **자유 텍스트 한 덩어리**
+    # ("칼사다 돌길 미끄러움", "렐루 서점 사전 예약 필수" 등). 희경·재승이 같이 보는 값이라
+    # 브라우저 저장이 아니라 DB에 둔다. NULL = 아직 안 적음. 길이 상한은 schemas.py
+    # (`MAX_TRIP_TRAVEL_TIPS_LENGTH`)에서 입력 검증으로만 건다(컬럼 제약 없음 — 기존 notes와 같은 정책).
+    travel_tips: str | None = None
     created_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
     updated_at: dt.datetime = Field(default_factory=dt.datetime.utcnow)
 
@@ -126,6 +131,11 @@ class ItineraryItem(SQLModel, table=True):
     # 사용자가 고칠 수 있는 값이므로, 자동 판별이 틀렸을 때는 이 값을 고치는 것이 탈출구다.
     place_category: str | None = None  # 사람이 읽는 분류 라벨 ("문화센터", "한식당")
     region_name: str | None = None  # "광주광역시 동구"
+
+    # "필수 방문" 표시(ADR-0015). 여행 가이드 페이지에서 큰 마커/별표 + "필수 명소만" 필터의 기준.
+    # 두 사람이 공유하는 계획 데이터라 DB에 둔다. NOT NULL + 기본 False — "모른다"는 상태가
+    # 따로 없고(표시 안 했으면 필수 아님), 기존 행은 마이그레이션의 server_default로 False가 된다.
+    is_must_visit: bool = False
 
     # (`route_role` 컬럼이 여기 있었다 — ADR-0012의 "사용자가 시작/끝점을 핀으로 고정" 방식.
     #  ADR-0013에서 그 방식 자체가 폐기되어 마이그레이션 `e57c1b0a92d4`로 드롭했다.

@@ -183,6 +183,12 @@ export default function DayEditorPage() {
         <h1 className="text-2xl font-semibold text-slate-800">{trip.name}</h1>
         <div className="flex shrink-0 items-center gap-2">
         <Link
+          to={`/trips/${tripIdNum}/guide`}
+          className="flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >
+          <span aria-hidden="true">🗺️</span> 가이드
+        </Link>
+        <Link
           to={`/tools?trip=${tripIdNum}`}
           className="flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
         >

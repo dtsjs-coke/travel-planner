@@ -20,6 +20,8 @@ export interface ItemCreateInput {
   /** 등록 시점에 구글이 채워주는 값(추가 비용 0). 수동 입력이면 비워둔다(ADR-0011). */
   place_category?: string
   region_name?: string
+  /** 생략하면 false(ADR-0015). */
+  is_must_visit?: boolean
 }
 
 export async function listItems(dayId: number): Promise<ItineraryItem[]> {
@@ -50,6 +52,8 @@ export interface ItemUpdateInput {
   notes?: string | null
   place_category?: string | null
   region_name?: string | null
+  /** 필수 방문 토글(ADR-0015). `null`은 422(NOT NULL) — 끄려면 `false`를 보낸다. */
+  is_must_visit?: boolean
 }
 
 export async function updateItem(itemId: number, input: ItemUpdateInput): Promise<ItineraryItem> {

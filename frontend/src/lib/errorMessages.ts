@@ -130,6 +130,12 @@ const DYNAMIC_MESSAGE_RULES: Array<{
       return `${fieldLabel[m[1]] ?? m[1]}은(는) 최대 ${m[2]}자까지 입력할 수 있습니다.`
     },
   },
+  // app/schemas.py: TripUpdate travel_tips 검증 (ADR-0015)
+  // f"travel_tips must be at most {MAX_TRIP_TRAVEL_TIPS_LENGTH} characters"
+  {
+    pattern: /^travel_tips must be at most (\d+) characters$/,
+    translate: (m) => `팁·메모는 최대 ${m[1]}자까지 입력할 수 있습니다.`,
+  },
   // app/schemas.py: AppSettingsUpdate._validate_participants()
   // f"participant name for '{key}' must not be empty"
   {

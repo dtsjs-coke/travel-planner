@@ -42,6 +42,7 @@ export default function ItineraryItemDetailModal({ item, onClose }: Props) {
   const [regionDraft, setRegionDraft] = useState(item.region_name ?? '')
   const [startTimeDraft, setStartTimeDraft] = useState(toTimeInputValue(item.start_time))
   const [notesDraft, setNotesDraft] = useState(item.notes ?? '')
+  const [mustVisitDraft, setMustVisitDraft] = useState(item.is_must_visit)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -67,6 +68,8 @@ export default function ItineraryItemDetailModal({ item, onClose }: Props) {
     if (categoryDraft !== (item.place_category ?? '')) patch.place_category = categoryDraft
     if (regionDraft !== (item.region_name ?? '')) patch.region_name = regionDraft
     if (notesDraft !== (item.notes ?? '')) patch.notes = notesDraft
+    // 끌 때는 null이 아니라 false를 보낸다(null은 서버가 422로 거부, ADR-0015).
+    if (mustVisitDraft !== item.is_must_visit) patch.is_must_visit = mustVisitDraft
     if (startTimeDraft !== toTimeInputValue(item.start_time)) {
       // 시간 입력을 비우면 서버는 빈 문자열이 아니라 명시적 null을 원한다(dt.time 파싱 대상이라
       // 텍스트 필드처럼 "빈 문자열 = 지움"을 스스로 처리하지 않는다).
@@ -100,6 +103,19 @@ export default function ItineraryItemDetailModal({ item, onClose }: Props) {
         </div>
 
         <div className="flex flex-col gap-4">
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={mustVisitDraft}
+              onChange={(e) => setMustVisitDraft(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-red-600"
+            />
+            <span>
+              <span className="font-medium text-red-600">★</span> 필수 방문 장소로 표시
+              <span className="block text-xs text-slate-500">여행 가이드 지도에서 크게 강조돼요.</span>
+            </span>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm text-slate-600">
               장소 카테고리

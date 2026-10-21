@@ -149,6 +149,11 @@ export default function ItineraryItemCard({
               className="min-w-0 flex-1 truncate text-left text-slate-800 hover:underline"
               title="클릭하여 상세보기"
             >
+              {item.is_must_visit && (
+                <span className="mr-1 text-red-500" title="필수 방문" aria-label="필수 방문">
+                  ★
+                </span>
+              )}
               {item.title}
             </button>
             {startTimeLabel && (

@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import PasscodeGate from './routes/PasscodeGate'
 import TripListPage from './routes/TripListPage'
 import DayEditorPage from './routes/DayEditorPage'
+import TripGuidePage from './routes/TripGuidePage'
 import ToolsPage from './routes/ToolsPage'
 
 const queryClient = new QueryClient()
@@ -23,6 +24,7 @@ function AuthedRoutes() {
     <Routes>
       <Route path="/trips" element={<TripListPage />} />
       <Route path="/trips/:tripId" element={<DayEditorPage />} />
+      <Route path="/trips/:tripId/guide" element={<TripGuidePage />} />
       <Route path="/tools" element={<ToolsPage />} />
       <Route path="*" element={<Navigate to="/trips" replace />} />
     </Routes>

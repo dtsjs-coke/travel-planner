@@ -15,6 +15,9 @@ export interface TripUpdateInput {
   start_date?: string | null
   end_date?: string | null
   currency?: string
+  /** 팁/추천 메모(ADR-0015). 최대 5000자. `null`이나 빈 문자열(공백만 포함)은 "지움"으로 저장된다.
+   * 서버가 양끝 공백을 다듬어 저장하므로 화면은 응답값으로 갱신할 것. */
+  travel_tips?: string | null
 }
 
 export async function listTrips(): Promise<Trip[]> {

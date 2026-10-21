@@ -33,6 +33,12 @@ MAX_REGION_NAME_LENGTH = 100  # "광주광역시 동구"
 # (AI 추천이 넣는 한 줄 이유는 200자라 영향 없다).
 MAX_ITEM_NOTES_LENGTH = 2000
 
+# 여행 가이드의 팁/추천 메모(`Trip.travel_tips`, ADR-0015) 길이 상한. 일정 하나의 메모(2000자)와 달리
+# **여행 전체**에 대한 여러 단락짜리 글(이동 팁 / 예약 필수 스팟 / 맛집 메모 …)이라 더 넉넉히 두되,
+# 무료 티어 DB에 수 MB짜리 붙여넣기가 들어오는 것은 같은 이유로 막는다. `GET /api/trips`(목록)에도
+# 실려 나가는 필드라 상한이 곧 목록 응답 크기 상한이기도 하다.
+MAX_TRIP_TRAVEL_TIPS_LENGTH = 5000
+
 
 def _validate_name_length(value: str, *, field_label: str, max_length: int) -> str:
     """이름/제목류 필드의 길이 상한을 검증한다(trim 등 다른 정규화는 하지 않는다 —
@@ -150,6 +156,12 @@ class TripUpdate(BaseModel):
     start_date: dt.date | None = None
     end_date: dt.date | None = None
     currency: str | None = None
+    # 팁/추천 메모(ADR-0015). nullable이고 "다 지우기"는 정상 조작이라 `notes`와 같은 정책 —
+    # 명시적 null도, 빈 문자열/공백도 "지움"(None)으로 저장한다. 줄바꿈은 보존된다.
+    # `TripCreate`에는 넣지 않는다: 여행을 만들 때 같이 적는 화면이 없고(가이드 페이지에서만 편집),
+    # 지금 호출할 곳이 없는 입력 경로를 늘리지 않는다. (pydantic 기본 설정상 POST에 실어 보내도
+    # 422가 아니라 조용히 무시된다.)
+    travel_tips: str | None = None
 
     # 날짜 검증은 여기서 못 한다: PATCH는 부분 업데이트라 요청에 한쪽 날짜만 올 수 있고,
     # 그때는 DB에 저장된 기존 값과 합쳐야 최종 기간이 정해진다.
@@ -169,6 +181,13 @@ class TripUpdate(BaseModel):
             value, field_label="name", max_length=MAX_TRIP_NAME_LENGTH
         )
 
+    @field_validator("travel_tips")
+    @classmethod
+    def _validate_travel_tips(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(
+            value, field_label="travel_tips", max_length=MAX_TRIP_TRAVEL_TIPS_LENGTH
+        )
+
 
 class TripRead(ORMModel):
     id: int
@@ -177,6 +196,8 @@ class TripRead(ORMModel):
     start_date: dt.date | None
     end_date: dt.date | None
     currency: str
+    # 여행 가이드 팁/추천 메모(ADR-0015). 목록/상세/PATCH 응답 모두에 실린다.
+    travel_tips: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
 
@@ -273,6 +294,8 @@ class ItineraryItemCreate(PlaceDetailFields):
     cost_currency: str | None = None
     paid_by: str | None = None
     url: str | None = None
+    # 필수 방문 표시(ADR-0015). 생성 시에는 `bool` 타입 자체가 null을 거부하므로 별도 validator가 없다.
+    is_must_visit: bool = False
 
     @field_validator("title")
     @classmethod
@@ -313,6 +336,9 @@ class ItineraryItemUpdate(PlaceDetailFields):
     cost_currency: str | None = None
     paid_by: str | None = None
     url: str | None = None
+    # 필수 방문 토글(ADR-0015). 생략 = 안 바꿈. NOT NULL 컬럼이라 명시적 null은 아래 validator가
+    # 422로 막는다(`ChecklistItemUpdate.is_checked`와 같은 방어 — 통과시키면 setattr(None) → 500).
+    is_must_visit: bool | None = None
 
     # title 필드가 요청에 아예 없으면 라우터가 model_dump(exclude_unset=True)로
     # 걸러내므로 이 validator 자체가 호출되지 않는다(기본값 None은 validate_default
@@ -347,6 +373,13 @@ class ItineraryItemUpdate(PlaceDetailFields):
     def _validate_paid_by(cls, value: str | None) -> str | None:
         return _normalize_paid_by(value)
 
+    @field_validator("is_must_visit")
+    @classmethod
+    def _validate_is_must_visit(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("is_must_visit must not be null")
+        return value
+
 
 class ItineraryItemRead(ORMModel):
     id: int
@@ -370,6 +403,8 @@ class ItineraryItemRead(ORMModel):
     # 이후로는 사용자가 상세보기에서 직접 고친다.
     place_category: str | None
     region_name: str | None
+    # 필수 방문 표시(ADR-0015). 여행 가이드 페이지의 큰 마커/별표 + "필수 명소만" 필터 기준.
+    is_must_visit: bool
 
 
 class ReorderItemsRequest(BaseModel):
